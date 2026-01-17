@@ -18,21 +18,44 @@ export default function AboutPageUi() {
 
   const fetchAboutContent = async () => {
     try {
-      // ✅ LOGIC: Fetch both About content and Global Contact settings
       const aboutSnap = await getDoc(doc(db, "settings", "about"))
       const contactSnap = await getDoc(doc(db, "settings", "contact"))
 
-      if (aboutSnap.exists()) {
-        let aboutData = aboutSnap.data()
-
-        // ✅ LOGIC: Override careersEmail with the Global Email set by CEO
-        if (contactSnap.exists()) {
-          const contactData = contactSnap.data()
-          aboutData.careersEmail = contactData.email || "sales@farmlivestock.com"
-        }
-
-        setAbout(aboutData)
+      // ✅ DEFAULT DATA: This ensures the page has images even if Admin hasn't saved yet
+      let finalData = {
+        heroTitle: 'Our Story of Passion & Purpose',
+        heroSubtitle: 'Where Tradition Meets Innovation in Modern Farming',
+        heroDescription: 'For over 25 years, we have been dedicated to redefining excellence in livestock farming...',
+        mission: 'To revolutionize livestock farming...',
+        vision: 'A world where every animal is raised with dignity...',
+        ceoName: 'Johnathan O. Williams',
+        ceoTitle: 'Founder & Chief Executive Officer',
+        ceoImage: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
+        ceoQuote: 'True farming is not just a business...',
+        ceoBio: 'With 25+ years in sustainable agriculture...',
+        values: [
+          { icon: '🌱', title: 'Sustainability', description: 'Regenerative practices' },
+          { icon: '❤️', title: 'Animal Welfare', description: 'Stress-free environments' }
+        ],
+        stats: [
+          { value: '25+', label: 'Years Experience' },
+          { value: '5000+', label: 'Happy Clients' }
+        ],
+        teamImage: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=800&q=80',
+        careersEmail: 'sales@farmlivestock.com'
       }
+
+      if (aboutSnap.exists()) {
+        // ✅ Override defaults with real Admin data
+        finalData = { ...finalData, ...aboutSnap.data() }
+      }
+
+      if (contactSnap.exists()) {
+        const contactData = contactSnap.data()
+        finalData.careersEmail = contactData.email || finalData.careersEmail
+      }
+
+      setAbout(finalData)
     } catch (error) {
       console.error("Error fetching about content:", error)
     } finally {
@@ -48,6 +71,7 @@ export default function AboutPageUi() {
     )
   }
 
+  // ✅ Never returns null now, will always show at least default data
   if (!about) return null
 
   return (
@@ -73,6 +97,7 @@ export default function AboutPageUi() {
             </div>
             <div className="relative">
               <div className="grid grid-cols-2 gap-4">
+                {/* ✅ CEO IMAGE FROM DATABASE */}
                 <img src={about.ceoImage} className="h-64 w-full object-cover rounded-3xl shadow-xl" alt="CEO" />
                 <div className="space-y-4">
                   <img src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80" className="h-30 w-full object-cover rounded-3xl shadow-xl" alt="Farm" />
@@ -180,6 +205,7 @@ export default function AboutPageUi() {
             </div>
             <div className="relative">
               <div className="relative z-10">
+                {/* ✅ CEO IMAGE FROM DATABASE */}
                 <img 
                   src={about.ceoImage} 
                   className="w-full h-[450px] md:h-[500px] object-cover rounded-3xl shadow-2xl"
@@ -207,6 +233,7 @@ export default function AboutPageUi() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="relative">
+              {/* ✅ TEAM IMAGE FROM DATABASE */}
               <img 
                 src={about.teamImage} 
                 className="w-full h-[450px] md:h-[500px] object-cover rounded-3xl shadow-xl"
@@ -232,7 +259,6 @@ export default function AboutPageUi() {
                 Our team of passionate farmers, veterinarians, and agriculture experts work together to ensure every animal receives the highest standard of care. We believe that happy animals raised in stress-free environments produce the best quality products.
               </p>
               <div className="pt-4">
-                {/* ✅ Link now uses the Global CEO Email */}
                 <Link 
                   href={`mailto:${about.careersEmail}`}
                   className="inline-flex items-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-emerald-700 transition-colors"

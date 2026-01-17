@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, auth, storage } from '@/lib/firebaseConfig'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -7,7 +7,7 @@ import { initializeApp, deleteApp, getApps } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { collection, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy, getDoc, setDoc, where } from 'firebase/firestore'
-import { UserPlusIcon, TrashIcon, ArrowLeftIcon, ShieldCheckIcon, PhoneIcon, AtSymbolIcon, PhotoIcon, PencilIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
+import { UserPlusIcon, TrashIcon, ArrowLeftIcon, ShieldCheckIcon, PhoneIcon, AtSymbolIcon, PhotoIcon, PencilIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpTrayIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { FaFacebookF, FaInstagram, FaTiktok, FaTwitter, FaYoutube } from 'react-icons/fa'
 import toast from 'react-hot-toast'
 
@@ -23,11 +23,12 @@ const ManageStaff = () => {
   const [socials, setSocials] = useState({ facebook: '', instagram: '', twitter: '', youtube: '', tiktok: '' })
   const [updatingSettings, setUpdatingSettings] = useState(false)
 
-  // Toggle States for Mobile length
   const [isContactOpen, setIsContactOpen] = useState(false)
   const [isAboutOpen, setIsAboutOpen] = useState(false)
+
+  const ceoInputRef = useRef<HTMLInputElement>(null)
+  const teamInputRef = useRef<HTMLInputElement>(null)
   
-  // Full Original About State (Restored all data)
   const [about, setAbout] = useState({
     heroTitle: 'Our Story of Passion & Purpose',
     heroSubtitle: 'Where Tradition Meets Innovation in Modern Farming',
@@ -125,15 +126,30 @@ const ManageStaff = () => {
     } catch (e) { toast.error("Failed", { id: tId }) }
   }
 
+  // ✅ LOGIC UPDATED: Now uses "settings/about" folder to match your storage rules
   const handleImageUpload = async (file: File, type: 'ceo' | 'team') => {
+    const setStatus = type === 'ceo' ? setUploadingCEOImage : setUploadingTeamImage;
+    setStatus(true)
     const tId = toast.loading(`Uploading ${type} image...`)
+    
     try {
-      const storageRef = ref(storage, `about/${type}_${Date.now()}`)
-      await uploadBytes(storageRef, file)
-      const url = await getDownloadURL(storageRef)
-      setAbout(prev => ({ ...prev, [type === 'ceo' ? 'ceoImage' : 'teamImage']: url }))
-      toast.success("Uploaded!", { id: tId })
-    } catch (e) { toast.error("Error", { id: tId }) }
+      // 1. Storage Reference (using settings/about path)
+      const storageRef = ref(storage, `settings/about/${type}_${Date.now()}`)
+      
+      // 2. Upload Bytes
+      const uploadResult = await uploadBytes(storageRef, file)
+      
+      // 3. Get the real HTTPS URL
+      const permanentUrl = await getDownloadURL(uploadResult.ref)
+      
+      // 4. Update state with permanent URL
+      setAbout(prev => ({ ...prev, [type === 'ceo' ? 'ceoImage' : 'teamImage']: permanentUrl }))
+      toast.success("Uploaded successfully!", { id: tId })
+    } catch (e) { 
+      toast.error("Error uploading image", { id: tId }) 
+    } finally {
+      setStatus(false)
+    }
   }
 
   const handleAddAdmin = async (e: React.FormEvent) => {
@@ -251,7 +267,7 @@ const ManageStaff = () => {
                       <h2 className="md:text-xl font-black text-gray-900 uppercase">Authorized Team</h2>
                       <span className="text-[10px] font-black text-gray-400 bg-white border border-gray-100 px-3 py-1.5 rounded-full shadow-sm">{admins.length} MEMBERS</span>
                    </div>
-                   <div className="md:w-full grid grid-cols-1  gap-3">
+                   <div className="md:w-full grid grid-cols-1   gap-3">
                       {admins.map((admin) => (
                         <div key={admin.id} className="bg-white p-2 md:p-4 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center hover:border-amber-200 transition-all group">
                            <div className="flex items-center gap-2 md:gap-4">
@@ -290,21 +306,51 @@ const ManageStaff = () => {
                           
                           <div className="bg-white px-3 py-4 rounded-lg border border-gray-200 space-y-3">
                              <p className="text-[10px] font-black text-purple-500 uppercase">CEO Profile</p>
+                             
+                             <div className="flex items-center gap-4 p-2 bg-gray-50 rounded-lg">
+                                <img src={about.ceoImage} className="w-12 h-12 rounded-full object-cover border border-purple-100 shadow-sm" />
+                                <button 
+                                  onClick={() => ceoInputRef.current?.click()}
+                                  className="flex items-center gap-2 text-[10px] font-black uppercase text-purple-600 bg-white px-3 py-2 rounded-lg border border-purple-100 hover:bg-purple-50 transition-all"
+                                >
+                                  <ArrowUpTrayIcon className="w-3 h-3" /> {uploadingCEOImage ? '...' : 'CEO Image'}
+                                </button>
+                                <input type="file" ref={ceoInputRef} hidden accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'ceo')} />
+                             </div>
+
                              <input value={about.ceoName} onChange={e => setAbout({...about, ceoName: e.target.value})} className="w-full p-2 bg-gray-50 border-none rounded-md text-xs font-bold" placeholder="Name" />
-                             <textarea value={about.ceoBio} onChange={e => setAbout({...about, ceoBio: e.target.value})} className="w-full p-2 bg-gray-50 border-none rounded-md text-xs h-24" placeholder="Bio" />
+                             <textarea value={about.ceoBio} onChange={e => setAbout({...about, ceoBio: e.target.value})} className="w-full p-2 bg-gray-50 border-none rounded-md text-xs h-12" placeholder="Bio" />
                           </div>
                       </div>
 
                       {/* Middle Grid: Core Values */}
                       <div className="bg-white px-3 py-4 rounded-lg border border-gray-200">
-                         <p className="text-[10px] font-black text-purple-500 uppercase mb-4">Core Values</p>
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {about.values.map((v, i) => (
-                               <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
-                                  <input value={v.icon} onChange={e => { const n = [...about.values]; n[i].icon = e.target.value; setAbout({...about, values: n}) }} className="w-8 text-center bg-white border-none rounded text-sm" />
-                                  <input value={v.title} onChange={e => { const n = [...about.values]; n[i].title = e.target.value; setAbout({...about, values: n}) }} className="flex-1 bg-white border-none rounded p-1 text-xs" />
-                               </div>
-                            ))}
+                         <div className="flex items-center justify-between mb-4">
+                            <p className="text-[10px] font-black text-purple-500 uppercase">Core Values & Team Image</p>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                            <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {about.values.map((v, i) => (
+                                   <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
+                                      <input value={v.icon} onChange={e => { const n = [...about.values]; n[i].icon = e.target.value; setAbout({...about, values: n}) }} className="w-8 text-center bg-white border-none rounded text-sm" />
+                                      <input value={v.title} onChange={e => { const n = [...about.values]; n[i].title = e.target.value; setAbout({...about, values: n}) }} className="flex-1 bg-white border-none rounded p-1 text-xs" />
+                                   </div>
+                                ))}
+                            </div>
+
+                            <div className="md:col-span-4 space-y-2">
+                                <div className="relative group rounded-xl overflow-hidden h-24 border border-gray-100">
+                                   <img src={about.teamImage} className="w-full h-full object-cover" />
+                                   <button 
+                                      onClick={() => teamInputRef.current?.click()}
+                                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all"
+                                   >
+                                      <ArrowUpTrayIcon className="w-6 h-6 text-white" />
+                                   </button>
+                                   <input type="file" ref={teamInputRef} hidden accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'team')} />
+                                </div>
+                                <p className="text-[8px] text-center font-bold text-gray-400 uppercase tracking-widest">Update Team Image</p>
+                            </div>
                          </div>
                       </div>
 
@@ -341,13 +387,13 @@ const ManageStaff = () => {
                    </div>
                 </div>
 
-                {/* Team List (Restored Original Style) */}
+                {/* Team List (Mobile) */}
                 <div className="md:hidden bg-white max-h-[500px] overflow-y-auto p-3 md:p-8 rounded-lg shadow-sm border border-gray-100">
                    <div className="flex items-center justify-between mb-6 ml-2">
                       <h2 className="md:text-xl font-black text-gray-900 uppercase">Authorized Team</h2>
                       <span className="text-[10px] font-black text-gray-400 bg-white border border-gray-100 px-3 py-1.5 rounded-full shadow-sm">{admins.length} MEMBERS</span>
                    </div>
-                   <div className="md:w-full grid grid-cols-1  gap-3">
+                   <div className="md:w-full grid grid-cols-1   gap-3">
                       {admins.map((admin) => (
                         <div key={admin.id} className="bg-white p-2 md:p-4 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center hover:border-amber-200 transition-all group">
                            <div className="flex items-center gap-2 md:gap-4">
