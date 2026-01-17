@@ -17,13 +17,12 @@ export default function Page() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState('')
+  const [selectedPrice, setSelectedPrice] = useState(0) // ✅ Added state for numeric price
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "livestock"), (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      // ✅ Safe Sort Logic: Most recent stock appears at the top
-      // Uses updatedAt or createdAt, falls back to 0 if neither exists
       const sortedDocs = docs.sort((a: any, b: any) => {
         const timeA = a.updatedAt?.seconds || a.createdAt?.seconds || 0;
         const timeB = b.updatedAt?.seconds || b.createdAt?.seconds || 0;
@@ -43,15 +42,18 @@ export default function Page() {
 
   const handleOpenOrder = (animal: any) => {
     if (!user) return toast.error("Please Sign In to order");
-    const info = `${animal.breed} (${animal.specs}) - ₦${animal.price.toLocaleString()}`;
+    
+    // ✅ Keep details as a descriptive string only
+    const info = `${animal.breed} (${animal.specs})`;
+    
     setSelectedInfo(info);
+    setSelectedPrice(animal.price); // ✅ Store the numeric price separately
     setModalOpen(true);
   }
 
-    // Inside your app/livestock/page.tsx
-    useEffect(() => {
-        window.scrollTo(10, 0);
-    }, []);
+  useEffect(() => {
+      window.scrollTo(0, 0);
+  }, []);
 
   if (loading) return null;
 
@@ -74,7 +76,6 @@ export default function Page() {
           ))}
         </div>
         
-        {/* Empty State if catalog is empty */}
         {livestock.length === 0 && (
           <div className="bg-white rounded-[2.5rem] p-20 text-center border border-emerald-100 shadow-sm">
             <p className="text-gray-400 font-bold italic">Our catalog is being updated. Check back shortly!</p>
@@ -82,10 +83,12 @@ export default function Page() {
         )}
       </div>
 
+      {/* ✅ Pass both the string and the clean numeric price */}
       <PlaceOrderModal 
         isOpen={modalOpen} 
         onClose={() => setModalOpen(false)} 
-        animalDetails={selectedInfo} 
+        animalDetails={selectedInfo}
+        price={selectedPrice} 
       />
     </main>
   );
