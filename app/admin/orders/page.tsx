@@ -32,17 +32,13 @@ const AdminOrders = () => {
       const settingsSnap = await getDoc(doc(db, "settings", "contact"));
       const message = `Hello ${order.customerName}, your order for "${order.orderDetails}" has been successfully delivered! Thank you for choosing FarmFresh.`;
       
-      // ✅ LOGIC: Format phone number for WhatsApp
-      let cleanNumber = order.phone.replace(/\D/g, ''); // Remove all non-digits
+      let cleanNumber = order.phone.replace(/\D/g, ''); 
       
       if (cleanNumber.startsWith('0')) {
-        // Change 080... to 23480...
         cleanNumber = '234' + cleanNumber.substring(1);
       } else if (cleanNumber.startsWith('234')) {
-        // Already has country code, do nothing
         cleanNumber = cleanNumber;
       } else if (cleanNumber.length === 10) {
-        // Handles cases where user enters just 80... without leading 0
         cleanNumber = '234' + cleanNumber;
       }
 
@@ -116,10 +112,14 @@ const AdminOrders = () => {
         {orders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {orders.map(order => {
-              // LOGIC: Calculate unit cost if totalAmount exists
               const qty = parseInt(order.quantity) || 1;
               const total = order.totalAmount || 0;
               const unitCost = total > 0 ? total / qty : 0;
+
+              // ✅ LOGIC: Format the Firestore Timestamp to a readable date
+              const orderDate = order.createdAt?.toDate 
+                ? order.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+                : '---';
 
               return (
                 <div key={order.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
@@ -130,13 +130,16 @@ const AdminOrders = () => {
                       }`}>
                         {order.status}
                       </span>
-                      <p className="text-[10px] text-gray-400 font-mono">ID: {order.id.slice(0, 8)}</p>
+                      {/* ✅ Added Date below ID */}
+                      <div className="text-right">
+                        <p className="text-[10px] text-gray-400 font-mono">ID: {order.id.slice(0, 8)}</p>
+                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter mt-0.5">{orderDate}</p>
+                      </div>
                     </div>
                     
                     <h3 className="text-sm md:text-base font-black text-gray-900 mb-1">{order.orderDetails}</h3>
                     <p className="text-sm font-bold text-green-600 mb-4 uppercase tracking-tight">{order.customerName}</p>
                     
-                    {/* ✅ PRICING & BREAKDOWN SECTION */}
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
                         <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
@@ -152,18 +155,16 @@ const AdminOrders = () => {
                         </p>
                         <p className="text-sm font-black text-emerald-900">{qty}</p>
                       </div>
-                      
                     </div>
 
-                    {/* Total-Amount display */}
                     <div className="col-span-2 bg-emerald-900 p-3 rounded-lg border border-emerald-950 shadow-lg shadow-emerald-100">
-                        <div className="flex justify-between items-center">
-                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total Bill</p>
-                          <p className="text-lg font-black text-white">
-                            ₦{total > 0 ? total.toLocaleString() : 'No Amount Set'}
-                          </p>
-                        </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total Bill</p>
+                        <p className="text-lg font-black text-white">
+                          ₦{total > 0 ? total.toLocaleString() : 'No Amount Set'}
+                        </p>
                       </div>
+                    </div>
 
                     <div className="mt-4 space-y-3 text-sm bg-gray-50 p-4 rounded-lg border border-gray-100">
                       <div className="flex items-center justify-between">
