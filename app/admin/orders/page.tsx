@@ -31,7 +31,22 @@ const AdminOrders = () => {
     try {
       const settingsSnap = await getDoc(doc(db, "settings", "contact"));
       const message = `Hello ${order.customerName}, your order for "${order.orderDetails}" has been successfully delivered! Thank you for choosing FarmFresh.`;
-      const whatsappUrl = `https://wa.me/${order.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+      
+      // ✅ LOGIC: Format phone number for WhatsApp
+      let cleanNumber = order.phone.replace(/\D/g, ''); // Remove all non-digits
+      
+      if (cleanNumber.startsWith('0')) {
+        // Change 080... to 23480...
+        cleanNumber = '234' + cleanNumber.substring(1);
+      } else if (cleanNumber.startsWith('234')) {
+        // Already has country code, do nothing
+        cleanNumber = cleanNumber;
+      } else if (cleanNumber.length === 10) {
+        // Handles cases where user enters just 80... without leading 0
+        cleanNumber = '234' + cleanNumber;
+      }
+
+      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error("WhatsApp Error:", error);
