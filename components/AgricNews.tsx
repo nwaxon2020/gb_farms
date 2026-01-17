@@ -9,13 +9,13 @@ export default function AgricNews() {
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_NEWS_API_KEY
-        const query = encodeURIComponent('Nigeria AND (agriculture OR "food prices" OR livestock)')
-        const res = await fetch(
-          `https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&pageSize=4&apiKey=${apiKey}`
-        )
+        // ✅ Fetch from YOUR internal route, not NewsAPI directly
+        const res = await fetch('/api/news') 
         const data = await res.json()
-        if (data.articles) setArticles(data.articles)
+        
+        if (data.articles) {
+          setArticles(data.articles)
+        }
       } catch (err) {
         console.error("News Fetch Error:", err)
       } finally {
