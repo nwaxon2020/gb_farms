@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { db } from '@/lib/firebaseConfig'
+import { db, auth } from '@/lib/firebaseConfig' // Ensure auth is exported from your config
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { 
   collection, 
   onSnapshot, 
@@ -32,7 +33,7 @@ import {
   ExclamationCircleIcon,
   ClipboardDocumentListIcon,
   LockClosedIcon,
-  CalendarDaysIcon,
+  ArrowLeftIcon,
   ShieldCheckIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline'
@@ -79,6 +80,23 @@ export default function MasterBookkeeping() {
     return () => { unsubCats(); unsubOrders(); }
   }, [])
 
+  // ✅ NEW LOGIC: VERIFY PASSWORD AGAINST LOGIN ACCOUNT
+  const verifyCEO = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      toast.error("No active CEO session");
+      return false;
+    }
+    try {
+      const credential = EmailAuthProvider.credential(user.email, ceoPass);
+      await reauthenticateWithCredential(user, credential);
+      return true;
+    } catch (error) {
+      toast.error("Incorrect Login Password");
+      return false;
+    }
+  };
+
   const getCleanBreed = (fullName: string) => fullName ? fullName.split('(')[0].trim() : "Unknown";
 
   const openInventory = () => {
@@ -102,18 +120,20 @@ export default function MasterBookkeeping() {
   const currentTotal = (activeAnimal?.unitPrice || 0) * (Number(walkInForm.qty) || 0);
 
   const handleSingleDelete = async () => {
-    if (ceoPass === process.env.NEXT_PUBLIC_ADMIN_ID) {
+    // Logic updated to use verifyCEO
+    const isVerified = await verifyCEO();
+    if (isVerified) {
       await deleteDoc(doc(db, "customersOrders", itemToDelete!));
       toast.success("Record Deleted");
       setItemToDelete(null);
       setCeoPass('');
-    } else {
-      toast.error("Invalid CEO Password");
     }
   }
 
   const handleWipeHistory = async () => {
-    if (ceoPass === process.env.NEXT_PUBLIC_ADMIN_ID) {
+    // Logic updated to use verifyCEO
+    const isVerified = await verifyCEO();
+    if (isVerified) {
       const tId = toast.loading("Processing...");
       const delivered = orders.filter(o => o.status === 'delivered');
       for (const o of delivered) {
@@ -122,8 +142,6 @@ export default function MasterBookkeeping() {
       setShowClearOverlay(false);
       setCeoPass('');
       toast.success("History Cleared", { id: tId });
-    } else {
-      toast.error("Invalid CEO Password");
     }
   }
 
@@ -241,8 +259,14 @@ export default function MasterBookkeeping() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-3 md:px-8 font-sans">
-      
+    <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-3 md:px-8 font-sans"> 
+
+      {/* Back button */}
+      <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-2 transition-colors group">
+        <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+        <span>Back</span>
+      </button> 
+
       {/* CEO SECURITY OVERLAYS */}
       {showClearOverlay && (
         <div className="fixed inset-0 z-[400] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6">
@@ -336,7 +360,6 @@ export default function MasterBookkeeping() {
              </div>
           </div>
         ) : (
-          /* ✅ DASHBOARD VIEW */
           <>
             {showWalkInModal && (
               <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 transition-all duration-500 ${lastOrderId ? 'bg-black' : 'bg-emerald-950/60 backdrop-blur-sm'}`}>

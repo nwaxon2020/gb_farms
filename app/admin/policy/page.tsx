@@ -55,9 +55,9 @@ export default function PolicyManager() {
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-8 transition-all">
-          <ArrowLeftIcon className="w-5 h-5" />
-          <span>Back to Dashboard</span>
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-6 transition-colors group">
+          <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          <span>Back</span>
         </button>
 
         <div className="flex items-center gap-4 mb-10">

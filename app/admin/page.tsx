@@ -93,15 +93,15 @@ const AdminDashboard = () => {
           
           {/* ✅ 1. Bookkeeping & Inventory Card (Now First) */}
           <Link href="/admin/book-keeping" className="group">
-            <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-emerald-600 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-100 h-full flex flex-col items-center text-center relative overflow-hidden">
-              <div className="w-24 h-24 bg-emerald-100 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-                <CircleStackIcon className="w-8 h-8 md:w-12 md:h-12 text-emerald-700" />
+            <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-black transition-all duration-300 hover:shadow-2xl hover:shadow-gray-100 h-full flex flex-col items-center text-center relative overflow-hidden">
+              <div className="w-24 h-24 bg-gray-100 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+                <CircleStackIcon className="w-8 h-8 md:w-12 md:h-12 text-gray-800" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Book keeping</h2>
               <p className="text-gray-500 text-xs md:text-sm leading-relaxed mb-4 md:mb-8">
                 Manage livestock categories, update stock quantities, process walk-in sales, and track daily revenue.
               </p>
-              <div className="text-sm md:text-base mt-auto w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 group-hover:bg-black transition-colors shadow-lg shadow-emerald-100">
+              <div className="text-sm md:text-base mt-auto w-full py-4 bg-black text-white rounded-2xl font-bold flex items-center justify-center gap-2 group-hover:bg-gray-900 transition-colors shadow-lg shadow-gray-100">
                 <span>Manage Inventory</span>
                 <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
