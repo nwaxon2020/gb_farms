@@ -13,7 +13,8 @@ import {
   deleteDoc, 
   getDocs, 
   where, 
-  increment 
+  increment, 
+  serverTimestamp
 } from 'firebase/firestore'
 import { 
   CheckCircleIcon, 
@@ -57,12 +58,16 @@ const AdminOrders = () => {
   }
 
   const updateStatus = async (order: any) => {
-    const tId = toast.loading("Confirming delivery & updating stock...")
+    const tId = toast.loading("Finalizing sale and updating inventory...")
     try {
-      // 1. Update the Order status to delivered
-      await updateDoc(doc(db, "customersOrders", order.id), { status: 'delivered' })
+      // 1. UPDATE ORDER STATUS
+      await updateDoc(doc(db, "customersOrders", order.id), { 
+        status: 'delivered',
+        createdAt: serverTimestamp()
+      })
 
-      // 2. ✅ BOOKKEEPING LOGIC: Find matching category and deduct stock
+      // 2. DEDUCT STOCK
+      // We look for the animal in livestockCategories that matches the order
       const inventoryRef = collection(db, "livestockCategories");
       const q = query(inventoryRef, where("name", "==", order.orderDetails));
       const querySnapshot = await getDocs(q);
@@ -72,16 +77,21 @@ const AdminOrders = () => {
         await updateDoc(doc(db, "livestockCategories", categoryDoc.id), {
           stockQty: increment(-Number(order.quantity))
         });
+        toast.success("Stock deducted & Sale recorded!", { id: tId })
+      } else {
+        // If the category name doesn't match exactly, we still finish the order 
+        // but warn the admin.
+        toast.success("Order delivered, but category not found in inventory.", { id: tId })
       }
 
-      toast.success("Order delivered & Stock deducted!", { id: tId })
+      // 3. Notify Customer
       sendWhatsAppNotification(order);
+
     } catch (error) {
       console.error("Update Error:", error);
-      toast.error("Failed to update status", { id: tId })
+      toast.error("Failed to finalize sale", { id: tId })
     }
   }
-
   const deleteOrder = (id: string) => {
     toast((t) => (
       <div className="flex flex-col gap-3 p-1">
