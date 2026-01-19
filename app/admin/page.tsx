@@ -13,7 +13,8 @@ import {
   ArrowRightIcon,
   RectangleGroupIcon,
   PaintBrushIcon,
-  ScaleIcon 
+  ScaleIcon,
+  CircleStackIcon 
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -47,8 +48,6 @@ const AdminDashboard = () => {
   verify();
 }, [user, loading]);
 
-  // ✅ LOADING GUARD: Shows ONLY the spinner while checking Auth AND Database
-  // This prevents the "Flash" of the admin content for unauthorized users
   if (loading || checkingDb) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
@@ -60,7 +59,6 @@ const AdminDashboard = () => {
     )
   }
 
-  // Final safety: If not verified, show nothing while router redirects
   if (!isVerified) return null
 
   return (
@@ -92,6 +90,24 @@ const AdminDashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          
+          {/* ✅ 1. Bookkeeping & Inventory Card (Now First) */}
+          <Link href="/admin/book-keeping" className="group">
+            <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-emerald-600 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-100 h-full flex flex-col items-center text-center relative overflow-hidden">
+              <div className="w-24 h-24 bg-emerald-100 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+                <CircleStackIcon className="w-8 h-8 md:w-12 md:h-12 text-emerald-700" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Book keeping</h2>
+              <p className="text-gray-500 text-xs md:text-sm leading-relaxed mb-4 md:mb-8">
+                Manage livestock categories, update stock quantities, process walk-in sales, and track daily revenue.
+              </p>
+              <div className="text-sm md:text-base mt-auto w-full py-4 bg-emerald-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 group-hover:bg-black transition-colors shadow-lg shadow-emerald-100">
+                <span>Manage Inventory</span>
+                <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </Link>
+
           {/* Orders Card */}
           <Link href="/admin/orders" className="group">
             <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-emerald-500 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-100 h-full flex flex-col items-center text-center relative overflow-hidden">
@@ -110,7 +126,7 @@ const AdminDashboard = () => {
           </Link>
 
           {/* Manage Livestock Card */}
-          <Link href="/admin/livestock" className="group">
+          <Link href="/admin/add-livestock" className="group">
             <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-blue-500 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-100 h-full flex flex-col items-center text-center relative overflow-hidden">
               <div className="w-24 h-24 bg-blue-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-300">
                 <RectangleGroupIcon className="w-8 h-8 md:w-12 md:h-12 text-blue-600" />
@@ -120,7 +136,7 @@ const AdminDashboard = () => {
                 Update species, change pricing in Naira, and modify the public shop header text and video.
               </p>
               <div className="text-sm md:text mt-auto w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 group-hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">
-                <span>Manage Inventory</span>
+                <span>Manage Catalog</span>
                 <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>

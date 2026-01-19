@@ -3,7 +3,18 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from '@/lib/firebaseConfig'
-import { collection, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore'
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  updateDoc, 
+  doc, 
+  deleteDoc, 
+  getDocs, 
+  where, 
+  increment 
+} from 'firebase/firestore'
 import { 
   CheckCircleIcon, 
   TrashIcon, 
@@ -30,7 +41,6 @@ const AdminOrders = () => {
 
   const sendWhatsAppNotification = async (order: any) => {
     try {
-      // ✅ LOGIC: Create the unique receipt URL
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       
       const message = `*ORDER DELIVERED SUCCESSFULLY*%0A%0AHello ${order.customerName}, your livestock order has been delivered!%0A%0A*Receipt ID:* ${order.id.slice(0, 8).toUpperCase()}%0A*Order:* ${order.orderDetails}%0A*Total:* ₦${order.totalAmount?.toLocaleString()}%0A%0A*View & Download Your Receipt:*%0A${receiptUrl}%0A%0A_Thank you for choosing FarmFresh!_`;
@@ -47,12 +57,27 @@ const AdminOrders = () => {
   }
 
   const updateStatus = async (order: any) => {
-    const tId = toast.loading("Updating status...")
+    const tId = toast.loading("Confirming delivery & updating stock...")
     try {
+      // 1. Update the Order status to delivered
       await updateDoc(doc(db, "customersOrders", order.id), { status: 'delivered' })
-      toast.success("Order marked as delivered!", { id: tId })
+
+      // 2. ✅ BOOKKEEPING LOGIC: Find matching category and deduct stock
+      const inventoryRef = collection(db, "livestockCategories");
+      const q = query(inventoryRef, where("name", "==", order.orderDetails));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const categoryDoc = querySnapshot.docs[0];
+        await updateDoc(doc(db, "livestockCategories", categoryDoc.id), {
+          stockQty: increment(-Number(order.quantity))
+        });
+      }
+
+      toast.success("Order delivered & Stock deducted!", { id: tId })
       sendWhatsAppNotification(order);
     } catch (error) {
+      console.error("Update Error:", error);
       toast.error("Failed to update status", { id: tId })
     }
   }
@@ -134,7 +159,6 @@ const AdminOrders = () => {
                     <h3 className="text-sm md:text-base font-black text-gray-900 mb-1">{order.orderDetails}</h3>
                     <p className="text-sm font-bold text-green-600 mb-4 uppercase tracking-tight">{order.customerName}</p>
 
-                    {/* ✅ UI: Show Receipt URL for Admin if Delivered */}
                     {order.status === 'delivered' && (
                       <div className="mb-4 p-2 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-2">
                         <LinkIcon className="w-3 h-3 text-blue-500" />
