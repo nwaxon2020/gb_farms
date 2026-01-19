@@ -48,6 +48,7 @@ export default function AdminLivestock() {
       Goat: "bg-gray-800",
       Chicken: "bg-blue-800",
       Cow: "bg-emerald-900",
+      Fish: "bg-green-500",
     };
     return colors[animal] || "bg-gray-500";
   };
@@ -149,7 +150,7 @@ export default function AdminLivestock() {
                 <div className="grid grid-cols-2 gap-3">
                   <select className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
                     value={form.name} onChange={e => setForm({...form, name: e.target.value, color: getColor(e.target.value)})}>
-                    <option>Pig</option><option>Goat</option><option>Cow</option><option>Chicken</option><option>Snail</option>
+                    <option>Pig</option><option>Goat</option><option>Cow</option><option>Chicken</option><option>Snail</option><option>Fish</option>
                   </select>
                   <input required type="number" placeholder="Price ₦" className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
                     value={form.price} onChange={e => setForm({...form, price: e.target.value})} />

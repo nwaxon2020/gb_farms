@@ -11,7 +11,8 @@ import {
   ArrowLeftIcon,
   PhoneIcon,
   BanknotesIcon,
-  HashtagIcon
+  HashtagIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -29,20 +30,16 @@ const AdminOrders = () => {
 
   const sendWhatsAppNotification = async (order: any) => {
     try {
-      const settingsSnap = await getDoc(doc(db, "settings", "contact"));
-      const message = `Hello ${order.customerName}, your order for "${order.orderDetails}" has been successfully delivered! Thank you for choosing FarmFresh.`;
+      // ✅ LOGIC: Create the unique receipt URL
+      const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
+      
+      const message = `*ORDER DELIVERED SUCCESSFULLY*%0A%0AHello ${order.customerName}, your livestock order has been delivered!%0A%0A*Receipt ID:* ${order.id.slice(0, 8).toUpperCase()}%0A*Order:* ${order.orderDetails}%0A*Total:* ₦${order.totalAmount?.toLocaleString()}%0A%0A*View & Download Your Receipt:*%0A${receiptUrl}%0A%0A_Thank you for choosing FarmFresh!_`;
       
       let cleanNumber = order.phone.replace(/\D/g, ''); 
-      
-      if (cleanNumber.startsWith('0')) {
-        cleanNumber = '234' + cleanNumber.substring(1);
-      } else if (cleanNumber.startsWith('234')) {
-        cleanNumber = cleanNumber;
-      } else if (cleanNumber.length === 10) {
-        cleanNumber = '234' + cleanNumber;
-      }
+      if (cleanNumber.startsWith('0')) cleanNumber = '234' + cleanNumber.substring(1);
+      else if (cleanNumber.length === 10) cleanNumber = '234' + cleanNumber;
 
-      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
+      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${message}`;
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error("WhatsApp Error:", error);
@@ -115,8 +112,6 @@ const AdminOrders = () => {
               const qty = parseInt(order.quantity) || 1;
               const total = order.totalAmount || 0;
               const unitCost = total > 0 ? total / qty : 0;
-
-              // ✅ LOGIC: Format the Firestore Timestamp to a readable date
               const orderDate = order.createdAt?.toDate 
                 ? order.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
                 : '---';
@@ -130,7 +125,6 @@ const AdminOrders = () => {
                       }`}>
                         {order.status}
                       </span>
-                      {/* ✅ Added Date below ID */}
                       <div className="text-right">
                         <p className="text-[10px] text-gray-400 font-mono">ID: {order.id.slice(0, 8)}</p>
                         <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter mt-0.5">{orderDate}</p>
@@ -139,6 +133,20 @@ const AdminOrders = () => {
                     
                     <h3 className="text-sm md:text-base font-black text-gray-900 mb-1">{order.orderDetails}</h3>
                     <p className="text-sm font-bold text-green-600 mb-4 uppercase tracking-tight">{order.customerName}</p>
+
+                    {/* ✅ UI: Show Receipt URL for Admin if Delivered */}
+                    {order.status === 'delivered' && (
+                      <div className="mb-4 p-2 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-2">
+                        <LinkIcon className="w-3 h-3 text-blue-500" />
+                        <a 
+                          href={`${window.location.origin}/receipt/${order.id}`} 
+                          target="_blank" 
+                          className="text-[9px] text-blue-600 font-black uppercase tracking-tight hover:underline"
+                        >
+                          View Receipt
+                        </a>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
