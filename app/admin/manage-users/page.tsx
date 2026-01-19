@@ -37,7 +37,7 @@ const ManageStaff = () => {
     vision: 'A world where every animal is raised with dignity...',
     ceoName: 'Johnathan O. Williams',
     ceoTitle: 'Founder & Chief Executive Officer',
-    ceoImage: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
+    ceoImage: 'https://i0.wp.com/e-quester.com/wp-content/uploads/2021/11/placeholder-image-person-jpg.jpg?fit=820%2C678&ssl=1',
     ceoQuote: 'True farming is not just a business...',
     ceoBio: 'With 25+ years in sustainable agriculture...',
     values: [
