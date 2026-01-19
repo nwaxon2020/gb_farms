@@ -17,7 +17,7 @@ export default function AdminLivestock() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadingHero, setUploadingHero] = useState(false)
-  const [isHeroOpen, setIsHeroOpen] = useState(false) // ✅ State for dropdown
+  const [isHeroOpen, setIsHeroOpen] = useState(false) 
 
   const [form, setForm] = useState({ breed: '', name: 'Pig', price: '', desc: '', specs: '', image: '', color: 'bg-amber-600' })
   const [editId, setEditId] = useState<string | null>(null)
@@ -41,6 +41,17 @@ export default function AdminLivestock() {
     return () => unsub()
   }, [])
 
+  const getColor = (animal: string) => {
+    const colors: Record<string, string> = {
+      Pig: "bg-amber-600",
+      Snail: "bg-red-700",
+      Goat: "bg-gray-800",
+      Chicken: "bg-blue-800",
+      Cow: "bg-emerald-900",
+    };
+    return colors[animal] || "bg-gray-500";
+  };
+
   const handleUpload = async (file: File, path: string, setStatus: (val: boolean) => void) => {
     setStatus(true)
     const tId = toast.loading("Uploading image...");
@@ -62,6 +73,7 @@ export default function AdminLivestock() {
     e.preventDefault()
     if(!form.image) return toast.error("Please upload an image first");
     setLoading(true)
+  
     try {
       const data = { 
         ...form, 
@@ -77,25 +89,40 @@ export default function AdminLivestock() {
         await addDoc(collection(db, "livestock"), { ...data, createdAt: serverTimestamp() })
         toast.success("Added to catalog")
       }
-      setForm({ breed: '', name: 'Pig', price: '', desc: '', specs: '', image: '', color: 'bg-amber-600' })
+      setForm({ breed: '', name: 'Pig', price: '', desc: '', specs: '', image: '', color: getColor('Pig')})
       setEditId(null)
     } catch (err) { toast.error("Error saving") }
     setLoading(false)
   }
 
   const handleDelete = async (item: any) => {
-    if (!confirm(`Are you sure you want to delete ${item.breed}?`)) return;
-    const tId = toast.loading("Removing item...");
-    try {
-      await deleteDoc(doc(db, "livestock", item.id));
-      if (item.image && item.image.includes("firebasestorage.googleapis.com")) {
-        try {
-          const imageRef = ref(storage, item.image);
-          await deleteObject(imageRef);
-        } catch (e) { console.error("Storage delete failed", e) }
-      }
-      toast.success("Item removed", { id: tId });
-    } catch (err) { toast.error("Delete failed", { id: tId }); }
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-bold text-gray-800">Delete {item.breed} permanently?</p>
+        <div className="flex gap-2">
+          <button 
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const tId = toast.loading("Removing item...");
+              try {
+                await deleteDoc(doc(db, "livestock", item.id));
+                if (item.image && item.image.includes("firebasestorage.googleapis.com")) {
+                  try {
+                    const imageRef = ref(storage, item.image);
+                    await deleteObject(imageRef);
+                  } catch (e) { console.error("Storage delete failed", e) }
+                }
+                toast.success("Item removed", { id: tId });
+              } catch (err) { toast.error("Delete failed", { id: tId }); }
+            }} 
+            className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold"
+          >
+            Confirm
+          </button>
+          <button onClick={() => toast.dismiss(t.id)} className="bg-gray-100 px-4 py-1.5 rounded-lg text-xs font-bold">Cancel</button>
+        </div>
+      </div>
+    ), { duration: 5000 });
   };
 
   return (
@@ -115,27 +142,14 @@ export default function AdminLivestock() {
                 <PlusIcon className="w-6 h-6" /> {editId ? 'Edit Mode' : 'New Animal'}
               </h2>
 
-              {form.image && (
-                <div className="relative w-full h-48 mb-4 rounded-xl overflow-hidden group border-2 border-emerald-50 shadow-inner transition-all">
-                   <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
-                   <button 
-                    type="button"
-                    onClick={() => setForm({...form, image: ''})}
-                    className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
-                   >
-                     <XMarkIcon className="w-4 h-4" />
-                   </button>
-                </div>
-              )}
-
               <form onSubmit={handleSave} className="space-y-4">
                 <input required placeholder="Breed Name" className="w-full p-3 bg-gray-50 rounded-lg border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-emerald-500" 
                   value={form.breed} onChange={e => setForm({...form, breed: e.target.value})} />
                 
                 <div className="grid grid-cols-2 gap-3">
                   <select className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
-                    value={form.name} onChange={e => setForm({...form, name: e.target.value, color: e.target.value === 'Cow' ? 'bg-emerald-900' : 'bg-amber-600'})}>
-                    <option>Pig</option><option>Goat</option><option>Cow</option><option>Chiken</option><option>Snail</option>
+                    value={form.name} onChange={e => setForm({...form, name: e.target.value, color: getColor(e.target.value)})}>
+                    <option>Pig</option><option>Goat</option><option>Cow</option><option>Chicken</option><option>Snail</option>
                   </select>
                   <input required type="number" placeholder="Price ₦" className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
                     value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
@@ -148,6 +162,18 @@ export default function AdminLivestock() {
                   value={form.desc} onChange={e => setForm({...form, desc: e.target.value})} />
                 
                 <div className="space-y-2">
+                  {form.image && (
+                    <div className="relative w-full h-48 mb-4 rounded-xl overflow-hidden group border-2 border-emerald-50 shadow-inner transition-all">
+                      <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => setForm({...form, image: ''})}
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} 
                     className="w-full p-4 border-2 border-dashed border-gray-200 rounded-lg hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                   >
@@ -166,11 +192,10 @@ export default function AdminLivestock() {
                 <button type="submit" disabled={loading || uploading} className="w-full py-4 bg-emerald-900 text-white font-bold rounded-lg disabled:opacity-50 transition-all active:scale-[0.98]">
                   {loading ? 'Saving...' : 'Save Livestock'}
                 </button>
-                {editId && <button onClick={() => {setEditId(null); setForm({breed:'', name:'Pig', price:'', desc:'', specs:'', image:'', color:'bg-amber-600'})}} className="w-full mt-2 text-gray-400 text-xs font-bold hover:text-red-500">Cancel Editing</button>}
+                {editId && <button onClick={() => {setEditId(null); setForm({breed:'', name:'Pig', price:'', desc:'', specs:'', image:'', color:getColor('Pig')})}} className="w-full mt-2 text-gray-400 text-xs font-bold hover:text-red-500">Cancel Editing</button>}
               </form>
             </div>
 
-            {/* ✅ HERO SETTINGS (DROPDOWN) */}
             <div className="bg-white rounded-lg shadow-sm border border-emerald-100 overflow-hidden transition-all">
               <button 
                 onClick={() => setIsHeroOpen(!isHeroOpen)}
@@ -185,15 +210,15 @@ export default function AdminLivestock() {
 
               <div className={`transition-all duration-300 ease-in-out ${isHeroOpen ? 'max-h-[1000px] opacity-100 p-4 md:p-8 pt-0' : 'max-h-0 opacity-0 pointer-events-none'}`}>
                 <div className="border-t border-gray-100 pt-6 space-y-4">
-                  {header.heroImage && (
-                    <div className="w-full h-32 mb-4 rounded-lg overflow-hidden relative border border-gray-100 shadow-inner">
-                       <img src={header.heroImage} alt="Hero Preview" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <input placeholder="Title" className="w-full p-3 bg-gray-50 rounded-lg border-none ring-1 ring-gray-200" value={header.title} onChange={e => setHeader({...header, title: e.target.value})} />
-                  <textarea placeholder="Subtitle" className="w-full p-3 bg-gray-50 rounded-lg border-none ring-1 ring-gray-200 h-20" value={header.subtitle} onChange={e => setHeader({...header, subtitle: e.target.value})} />
+                  <input placeholder="Title" className="w-full p-3 bg-gray-50 rounded-lg border-none ring-1 ring-gray-200" value={header.title || ""} onChange={e => setHeader({...header, title: e.target.value})} />
+                  <textarea placeholder="Subtitle" className="w-full p-3 bg-gray-50 rounded-lg border-none ring-1 ring-gray-200 h-20" value={header.subtitle || ""} onChange={e => setHeader({...header, subtitle: e.target.value})} />
                   
                   <div className="space-y-2">
+                    {header.heroImage && (
+                      <div className="w-full h-32 mb-4 rounded-lg overflow-hidden relative border border-gray-100 shadow-inner">
+                        <img src={header.heroImage} alt="Hero Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
                     <button type="button" disabled={uploadingHero} onClick={() => heroImageInputRef.current?.click()} 
                       className="w-full p-3 border-2 border-dashed border-gray-200 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-amber-50 disabled:opacity-50"
                     >
@@ -206,7 +231,7 @@ export default function AdminLivestock() {
                        }
                     }} />
                     <input placeholder="...or paste background URL here" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none ring-1 ring-gray-100 text-center" 
-                      value={header.heroImage} onChange={e => setHeader({...header, heroImage: e.target.value})} />
+                      value={header.heroImage || "/animals.png"} onChange={e => setHeader({...header, heroImage: e.target.value})} />
                   </div>
 
                   <button onClick={() => {setDoc(doc(db, "settings", "livestockPage"), header); toast.success("Header saved")}} disabled={uploadingHero} className="w-full py-3 bg-amber-500 text-white font-bold rounded-xl disabled:opacity-50 active:scale-95 transition-all shadow-md shadow-amber-100">

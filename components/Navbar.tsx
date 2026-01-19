@@ -94,33 +94,45 @@ const Navbar = () => {
             ))}
             
             {user ? (
-              <div className="relative">
-                {/* Desktop Admin Click logic: Link to dashboard */}
-                <button 
-                  onClick={() => isAdmin ? router.push('/admin') : setUserMenuOpen(!userMenuOpen)} 
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <img 
-                    src={isAdmin ? 'https://ui-avatars.com/api/?name=Admin&background=D4AF37&color=fff' : (user.photoURL || 'https://ui-avatars.com/api/?name=User&background=10B981&color=fff')} 
-                    alt="User" className={`w-8 h-8 rounded-full border-2 ${isAdmin ? 'border-amber-400' : 'border-green-100'}`} 
-                  />
-                  <div className="text-left text-sm font-bold">
-                    <span className={isAdmin ? 'text-amber-600' : 'text-gray-900'}>{isAdmin ? 'Admin' : (user.displayName?.split(' ')[0])}</span>
-                  </div>
-                  {!isAdmin && <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />}
-                </button>
+              <div className="relative flex items-center">
+                {/* Desktop Profile Button */}
+                <div className="flex items-center bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                  <button 
+                    onClick={() => isAdmin ? router.push('/admin') : setUserMenuOpen(!userMenuOpen)} 
+                    className="flex items-center space-x-2 px-3 py-2 hover:bg-gray-100 transition-colors"
+                  >
+                    <img 
+                      src={isAdmin ? 'https://ui-avatars.com/api/?name=Admin&background=D4AF37&color=fff' : (user.photoURL || 'https://ui-avatars.com/api/?name=User&background=10B981&color=fff')} 
+                      alt="User" className={`w-8 h-8 rounded-full border-2 ${isAdmin ? 'border-amber-400' : 'border-green-100'}`} 
+                    />
+                    <div className="text-left text-sm font-bold">
+                      <span className={isAdmin ? 'text-amber-600' : 'text-gray-900'}>{isAdmin ? 'Admin' : (user.displayName?.split(' ')[0])}</span>
+                    </div>
+                  </button>
+
+                  {/* Desktop Dropdown Arrow - Only handles Logout menu toggle */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setUserMenuOpen(!userMenuOpen);
+                    }} 
+                    className="px-2 py-3 hover:bg-gray-200 border-l border-gray-200 transition-colors"
+                  >
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
                 
-                {userMenuOpen && !isAdmin && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50">
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50">
+                    {isAdmin && (
+                      <Link href="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center space-x-3 w-full px-4 py-2 text-amber-700 hover:bg-amber-50 font-semibold border-b border-gray-50">
+                        <ShieldCheckIcon className="w-5 h-5" /><span>Admin Dashboard</span>
+                      </Link>
+                    )}
                     <button onClick={handleLogout} className="flex items-center space-x-3 w-full px-4 py-2 text-red-600 hover:bg-red-50">
                       <ArrowRightStartOnRectangleIcon className="w-5 h-5" /><span>Sign Out</span>
                     </button>
                   </div>
-                )}
-
-                {/* Desktop Logout for Admin (Separate toggle if needed, or simple sign out link) */}
-                {isAdmin && (
-                   <button onClick={handleLogout} className="hidden lg:inline-flex ml-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-red-600 transition-colors">Sign Out</button>
                 )}
               </div>
             ) : (
