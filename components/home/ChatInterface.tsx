@@ -209,6 +209,12 @@ const ChatInterface = () => {
                   <div className={`max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl text-sm font-medium leading-relaxed ${alignRight ? 'bg-emerald-600 text-white rounded-tr-none shadow-xl shadow-emerald-900/20' : 'bg-emerald-900/20 text-emerald-50 border border-emerald-800/30 rounded-tl-none'}`}>
                     {msg.text}
                   </div>
+                  {/* Internal Admin Label */}
+                  {isAdmin && msg.isAdmin && (
+                    <span className="text-[9px] font-bold text-emerald-500/50 mt-1 uppercase tracking-tighter mr-1">
+                      {msg.senderId === user.uid ? 'You' : msg.senderEmail}
+                    </span>
+                  )}
                 </div>
               );
             })
