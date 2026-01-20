@@ -253,7 +253,7 @@ _Thank you!_`;
                   <div>
                     <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Important Notice</p>
                     <p className="text-[11px] text-amber-600 mt-1 font-medium">
-                      This action will: 1) Mark order as delivered 2) Deduct stock from inventory 3) Send WhatsApp notification to customer
+                      {"This action will: 1) Mark order as delivered 2) Deduct stock from inventory 3) Send WhatsApp notification to customer"}
                     </p>
                   </div>
                 </div>
