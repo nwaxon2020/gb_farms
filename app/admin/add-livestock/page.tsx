@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage, auth } from '@/lib/firebaseConfig'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import toast from 'react-hot-toast'
 import { PlusIcon, PencilSquareIcon, TrashIcon, ArrowUpTrayIcon, PhotoIcon, UserCircleIcon, CalendarIcon, ArrowLeftIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
@@ -20,7 +20,15 @@ export default function AdminLivestock() {
   const [uploadingHero, setUploadingHero] = useState(false)
   const [isHeroOpen, setIsHeroOpen] = useState(false) 
 
-  const [form, setForm] = useState({ breed: '', name: '', price: '', desc: '', specs: '', image: '', color: 'bg-emerald-900' })
+  const [form, setForm] = useState({ 
+    breed: '', 
+    category: '', // Changed from 'name' to 'category' 
+    price: '', 
+    desc: '', 
+    specs: '', 
+    image: '', 
+    color: 'bg-emerald-900' 
+  })
   const [newCategoryName, setNewCategoryName] = useState('') 
   const [editId, setEditId] = useState<string | null>(null)
   
@@ -67,33 +75,86 @@ export default function AdminLivestock() {
     } catch (err) { toast.error("Upload failed"); setStatus(false); return null; }
   }
 
-  // ✅ UPDATED SAVE LOGIC
+  // ✅ NEW: Helper function to check if category already exists (case-insensitive)
+  const categoryExists = (categoryName: string): boolean => {
+    if (!categoryName) return false;
+    const formattedCategory = formatName(categoryName);
+    return categories.some(cat => 
+      cat.name.toLowerCase() === formattedCategory.toLowerCase()
+    );
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if(!form.image) return toast.error("Please upload an image first");
     setLoading(true)
   
     try {
-      let finalCategory = form.name;
+      let finalCategory = form.category;
+      let categoryId = '';
 
-      if (form.name === 'other' && newCategoryName) {
+      // Handle new category creation
+      if (form.category === 'other' && newCategoryName) {
         const formattedNewCat = formatName(newCategoryName);
-        const exists = categories.find(c => c.name === formattedNewCat);
-        if (!exists) {
-          await addDoc(collection(db, "livestockCategories"), {
+        
+        // ✅ UPDATED: Check if category exists (case-insensitive)
+        const existingCat = categories.find(c => 
+          c.name.toLowerCase() === formattedNewCat.toLowerCase()
+        );
+        
+        if (existingCat) {
+          categoryId = existingCat.id;
+          finalCategory = existingCat.name;
+        } else {
+          // ✅ ADDED: Double-check with database to ensure no duplicates
+          const categoriesSnap = await getDocs(collection(db, "livestockCategories"));
+          const allCategories = categoriesSnap.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          
+          const duplicateInDB = allCategories.find(cat => 
+            (cat as any).name?.toLowerCase() === formattedNewCat.toLowerCase()
+          );
+          
+          if (duplicateInDB) {
+            toast.error(`Category "${formattedNewCat}" already exists!`);
+            setLoading(false);
+            return;
+          }
+          
+          // Create new category
+          const newCatRef = await addDoc(collection(db, "livestockCategories"), {
             name: formattedNewCat,
             unitPrice: Number(form.price),
             stockQty: 0, 
+            animalIds: [], // Initialize empty array for animal IDs
             createdAt: serverTimestamp()
           });
+          categoryId = newCatRef.id;
+          finalCategory = formattedNewCat;
+          toast.success(`New category "${formattedNewCat}" created!`);
         }
-        finalCategory = formattedNewCat;
+      } else if (form.category) {
+        // Find existing category (case-insensitive search)
+        const existingCat = categories.find(c => 
+          c.name.toLowerCase() === form.category.toLowerCase()
+        );
+        if (existingCat) {
+          categoryId = existingCat.id;
+          finalCategory = existingCat.name;
+        } else {
+          // This shouldn't happen normally, but just in case
+          toast.error(`Category "${form.category}" not found!`);
+          setLoading(false);
+          return;
+        }
       }
 
-      // We explicitly map the data to avoid sending the 'id' field back to Firestore
       const data = { 
         breed: form.breed,
-        name: finalCategory,
+        category: finalCategory, // Store category name
+        categoryId: categoryId, // Store category reference ID
         price: Number(form.price),
         desc: form.desc,
         specs: form.specs,
@@ -103,16 +164,39 @@ export default function AdminLivestock() {
         addedBy: user?.email || 'Unknown Admin' 
       }
 
+      let animalId: string;
       if (editId) {
-        await updateDoc(doc(db, "livestock", editId), data)
-        toast.success("Updated successfully")
+        // Update existing animal
+        await updateDoc(doc(db, "livestock", editId), data);
+        animalId = editId;
+        toast.success("Updated successfully");
       } else {
-        await addDoc(collection(db, "livestock"), { ...data, createdAt: serverTimestamp() })
-        toast.success("Added to catalog")
+        // Add new animal
+        const newAnimalRef = await addDoc(collection(db, "livestock"), { 
+          ...data, 
+          createdAt: serverTimestamp() 
+        });
+        animalId = newAnimalRef.id;
+        toast.success("Added to catalog");
       }
 
-      // Reset
-      setForm({ breed: '', name: '', price: '', desc: '', specs: '', image: '', color: 'bg-emerald-900'})
+      // Add animal ID to category's animalIds array if category exists
+      if (categoryId) {
+        const categoryRef = doc(db, "livestockCategories", categoryId);
+        const categoryDoc = await getDoc(categoryRef);
+        
+        if (categoryDoc.exists()) {
+          const currentAnimalIds = categoryDoc.data().animalIds || [];
+          if (!currentAnimalIds.includes(animalId)) {
+            await updateDoc(categoryRef, {
+              animalIds: [...currentAnimalIds, animalId]
+            });
+          }
+        }
+      }
+
+      // Reset form
+      setForm({ breed: '', category: '', price: '', desc: '', specs: '', image: '', color: 'bg-emerald-900'})
       setNewCategoryName('')
       setEditId(null)
     } catch (err: any) { 
@@ -130,8 +214,28 @@ export default function AdminLivestock() {
           <button onClick={async () => {
               toast.dismiss(t.id); const tId = toast.loading("Removing...");
               try {
+                // Remove from livestock collection
                 await deleteDoc(doc(db, "livestock", item.id));
-                if (item.image?.includes("firebasestorage")) await deleteObject(ref(storage, item.image));
+                
+                // Remove from category's animalIds array if exists
+                if (item.categoryId) {
+                  const categoryRef = doc(db, "livestockCategories", item.categoryId);
+                  const categoryDoc = await getDoc(categoryRef);
+                  
+                  if (categoryDoc.exists()) {
+                    const currentAnimalIds = categoryDoc.data().animalIds || [];
+                    const updatedAnimalIds = currentAnimalIds.filter((id: string) => id !== item.id);
+                    await updateDoc(categoryRef, {
+                      animalIds: updatedAnimalIds
+                    });
+                  }
+                }
+                
+                // Delete image from storage
+                if (item.image?.includes("firebasestorage")) {
+                  await deleteObject(ref(storage, item.image));
+                }
+                
                 toast.success("Removed", { id: tId });
               } catch (err) { toast.error("Failed"); }
             }} className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Confirm</button>
@@ -164,7 +268,7 @@ export default function AdminLivestock() {
                 
                 <div className="grid grid-cols-1 gap-3">
                   <select required className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200 font-bold text-sm" 
-                    value={form.name} onChange={e => setForm({...form, name: e.target.value})}>
+                    value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
                     <option value="">Select Category</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.name}>{cat.name}</option>
@@ -172,9 +276,29 @@ export default function AdminLivestock() {
                     <option value="other" className="text-emerald-600 font-black">+ Create New Category</option>
                   </select>
 
-                  {form.name === 'other' && (
-                    <input required placeholder="New Category Name" className="w-full p-3 bg-emerald-50 rounded-lg ring-1 ring-emerald-300" 
-                      value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} />
+                  {form.category === 'other' && (
+                    <>
+                      <input 
+                        required 
+                        placeholder="New Category Name" 
+                        className={`w-full p-3 rounded-lg ring-1 ${
+                          newCategoryName && categoryExists(newCategoryName) 
+                            ? 'bg-red-50 ring-red-500 text-red-600' 
+                            : 'bg-emerald-50 ring-emerald-300'
+                        }`} 
+                        value={newCategoryName} 
+                        onChange={e => setNewCategoryName(e.target.value)} 
+                      />
+                      {/* ✅ ADDED: Show warning if category already exists */}
+                      {newCategoryName && categoryExists(newCategoryName) && (
+                        <div className="text-red-600 text-xs font-bold animate-in slide-in-from-top duration-300 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          Category "{formatName(newCategoryName)}" already exists!
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <input required type="number" placeholder="Price ₦" className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
@@ -209,14 +333,23 @@ export default function AdminLivestock() {
                   <input placeholder="...or paste image URL here" className="w-full p-3 bg-gray-50 rounded-xl text-[10px] border-none ring-1 ring-gray-100 text-center uppercase font-bold tracking-tighter" 
                     value={form.image} onChange={e => setForm({...form, image: e.target.value})} />
                 </div>
-                <button type="submit" disabled={loading || uploading} className="w-full py-4 bg-emerald-900 text-white font-bold rounded-lg transition-all active:scale-[0.98]">
+                <button 
+                  type="submit" 
+                  disabled={
+                    loading || 
+                    uploading || 
+                    !!(form.category === 'other' && newCategoryName && categoryExists(newCategoryName))
+                  } 
+                  className="w-full py-4 bg-emerald-900 text-white font-bold rounded-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   {loading ? 'Saving...' : 'Save Livestock'}
                 </button>
-                {editId && <button onClick={() => {setEditId(null); setForm({breed:'', name:'', price:'', desc:'', specs:'', image:'', color:'bg-emerald-900'})}} className="w-full mt-2 text-gray-400 text-xs font-bold hover:text-red-500">Cancel Editing</button>}
+
+                {editId && <button onClick={() => {setEditId(null); setForm({breed:'', category:'', price:'', desc:'', specs:'', image:'', color:'bg-emerald-900'})}} className="w-full mt-2 text-gray-400 text-xs font-bold hover:text-red-500">Cancel Editing</button>}
               </form>
             </div>
 
-            {/* Hero Settings ... (Same as before) */}
+            {/* Hero Settings (No changes needed here) */}
             <div className="bg-white rounded-lg shadow-sm border border-emerald-100 overflow-hidden">
               <button onClick={() => setIsHeroOpen(!isHeroOpen)} className="w-full p-4 md:px-8 flex items-center justify-between bg-white hover:bg-gray-50">
                 <div className="flex items-center gap-2">
@@ -271,23 +404,22 @@ export default function AdminLivestock() {
                                   <img src={s.image} className="w-full h-full object-cover" alt={s.breed} />
                               </div>
                               <div className="flex flex-col">
-                                  <span className={`w-fit text-[9px] font-black uppercase px-2 py-0.5 rounded-full text-white ${s.color}`}>{s.name}</span>
+                                  <span className={`w-fit text-[9px] font-black uppercase px-2 py-0.5 rounded-full text-white ${s.color}`}>{s.category}</span>
                                   <h4 className="font-black text-emerald-900 md:text-lg leading-tight mt-1">{s.breed}</h4>
                                   <p className="text-xs text-emerald-600 font-bold">₦{s.price?.toLocaleString()}</p>
                                   <p className="text-[8px] md:text-[10px] text-gray-400 font-bold mt-1 uppercase italic tracking-tighter">Specs: {s.specs || 'N/A'}</p>
                               </div>
                           </div>
                           <div className="flex gap-2">
-                              {/* ✅ CORRECTED EDIT BUTTON */}
                               <button onClick={() => {
                                 setForm({
                                   breed: s.breed || '',
-                                  name: s.name || '', // This maps the old 'name' field to the new category dropdown
+                                  category: s.category || '',
                                   price: s.price?.toString() || '',
                                   desc: s.desc || '',
                                   specs: s.specs || '',
                                   image: s.image || '',
-                                  color: s.color || getColor(s.name)
+                                  color: s.color || getColor(s.category)
                                 }); 
                                 setEditId(s.id); 
                                 window.scrollTo({top:0, behavior:'smooth'})

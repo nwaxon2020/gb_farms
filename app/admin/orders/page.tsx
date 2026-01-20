@@ -24,12 +24,16 @@ import {
   PhoneIcon,
   BanknotesIcon,
   HashtagIcon,
-  LinkIcon
+  LinkIcon,
+  ExclamationTriangleIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([])
+  const [showConfirmDelivery, setShowConfirmDelivery] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -44,54 +48,139 @@ const AdminOrders = () => {
     try {
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       
-      const message = `*ORDER DELIVERED SUCCESSFULLY*%0A%0AHello ${order.customerName}, your livestock order has been delivered!%0A%0A*Receipt ID:* ${order.id.slice(0, 8).toUpperCase()}%0A*Order:* ${order.orderDetails}%0A*Total:* ₦${order.totalAmount?.toLocaleString()}%0A%0A*View & Download Your Receipt:*%0A${receiptUrl}%0A%0A_Thank you for choosing FarmFresh!_`;
+      // ✅ Use actual line breaks in the template string
+      const messageText = `*ORDER DELIVERED*
+
+Hello ${order.customerName},
+Your order has been delivered!
+
+*Details:*
+• ID: ${order.id.slice(0, 8).toUpperCase()}
+• Item: ${order.orderDetails}
+• Qty: ${order.quantity}
+• Total: ₦${order.totalAmount?.toLocaleString()}
+
+*Delivery Address:*
+${order.address}
+
+*Receipt:*
+${receiptUrl}
+
+_Thank you!_`;
+          
+      // ✅ PROPERLY ENCODE THE ENTIRE MESSAGE
+      const encodedMessage = encodeURIComponent(messageText);
       
       let cleanNumber = order.phone.replace(/\D/g, ''); 
       if (cleanNumber.startsWith('0')) cleanNumber = '234' + cleanNumber.substring(1);
       else if (cleanNumber.length === 10) cleanNumber = '234' + cleanNumber;
 
-      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${message}`;
+      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+      
+      console.log("📱 Testing WhatsApp URL:", whatsappUrl);
+      
       window.open(whatsappUrl, '_blank');
+      
     } catch (error) {
       console.error("WhatsApp Error:", error);
+      
+      // Fallback: Show receipt link
+      const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
+      toast(
+        <div className="p-4">
+          <p className="font-bold mb-2">Receipt Link</p>
+          <p className="text-sm mb-2">Copy this link to send to customer:</p>
+          <code className="bg-gray-100 p-2 rounded text-xs block break-all">
+            {receiptUrl}
+          </code>
+          <button 
+            onClick={() => {
+              navigator.clipboard.writeText(receiptUrl);
+              toast.success("Copied!");
+            }}
+            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm"
+          >
+            Copy Link
+          </button>
+        </div>,
+        { duration: 10000 }
+      );
     }
   }
 
   const updateStatus = async (order: any) => {
     const tId = toast.loading("Finalizing sale and updating inventory...")
     try {
+      // ✅ USE THE STORED CATEGORY FIELD (already cleaned from PlaceOrderModal)
+      const categoryName = order.category || '';
+      
+      if (!categoryName) {
+        toast.error("Order category not found", { id: tId });
+        return;
+      }
+
       // 1. UPDATE ORDER STATUS
       await updateDoc(doc(db, "customersOrders", order.id), { 
         status: 'delivered',
-        createdAt: serverTimestamp()
+        deliveredAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       })
 
-      // 2. DEDUCT STOCK
-      // We look for the animal in livestockCategories that matches the order
+      // 2. ✅ DEDUCT STOCK from livestockCategories using the stored category
       const inventoryRef = collection(db, "livestockCategories");
-      const q = query(inventoryRef, where("name", "==", order.orderDetails));
-      const querySnapshot = await getDocs(q);
+      const inventorySnap = await getDocs(inventoryRef);
+      
+      let foundCategory = false;
+      
+      for (const categoryDoc of inventorySnap.docs) {
+        const categoryData = categoryDoc.data();
+        const dbCategoryName = categoryData.name || '';
+        
+        // Case-insensitive comparison using the stored category field
+        if (dbCategoryName.toLowerCase() === categoryName.toLowerCase()) {
+          foundCategory = true;
+          
+          // Deduct stock
+          await updateDoc(doc(db, "livestockCategories", categoryDoc.id), {
+            stockQty: increment(-Number(order.quantity || 1)),
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log(`✅ Stock deducted for ${categoryName}: -${order.quantity}`);
+          break; // Found the category, no need to continue
+        }
+      }
 
-      if (!querySnapshot.empty) {
-        const categoryDoc = querySnapshot.docs[0];
-        await updateDoc(doc(db, "livestockCategories", categoryDoc.id), {
-          stockQty: increment(-Number(order.quantity))
-        });
-        toast.success("Stock deducted & Sale recorded!", { id: tId })
+      if (foundCategory) {
+        toast.success("Stock deducted & Sale recorded!", { id: tId });
       } else {
-        // If the category name doesn't match exactly, we still finish the order 
-        // but warn the admin.
-        toast.success("Order delivered, but category not found in inventory.", { id: tId })
+        // Log warning but still complete the order
+        console.warn(`⚠️ Category "${categoryName}" not found in inventory`);
+        toast.success("Order delivered, but category not found in inventory.", { id: tId });
       }
 
       // 3. Notify Customer
-      sendWhatsAppNotification(order);
+      setTimeout(() => {
+        sendWhatsAppNotification(order);
+      }, 1000); // Small delay to ensure order is updated
+
+      // Close confirmation modal
+      setShowConfirmDelivery(false);
+      setSelectedOrder(null);
 
     } catch (error) {
       console.error("Update Error:", error);
-      toast.error("Failed to finalize sale", { id: tId })
+      toast.error("Failed to finalize sale", { id: tId });
+      setShowConfirmDelivery(false);
+      setSelectedOrder(null);
     }
   }
+
+  const handleMarkDeliveryClick = (order: any) => {
+    setSelectedOrder(order);
+    setShowConfirmDelivery(true);
+  }
+
   const deleteOrder = (id: string) => {
     toast((t) => (
       <div className="flex flex-col gap-3 p-1">
@@ -116,6 +205,82 @@ const AdminOrders = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-4 md:px-8">
+      
+      {/* ✅ CONFIRMATION OVERLAY */}
+      {showConfirmDelivery && selectedOrder && (
+        <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <ExclamationTriangleIcon className="w-7 h-7 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Confirm Delivery</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Action Cannot Be Undone</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowConfirmDelivery(false);
+                  setSelectedOrder(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Order ID</span>
+                  <span className="text-sm font-black text-gray-900">{selectedOrder.id.slice(0, 8).toUpperCase()}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer</span>
+                  <span className="text-sm font-black text-emerald-700">{selectedOrder.customerName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Amount</span>
+                  <span className="text-lg font-black text-emerald-900">₦{selectedOrder.totalAmount?.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Important Notice</p>
+                    <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                      This action will: 1) Mark order as delivered 2) Deduct stock from inventory 3) Send WhatsApp notification to customer
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => updateStatus(selectedOrder)}
+                    className="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                  >
+                    Yes, Confirm
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowConfirmDelivery(false);
+                      setSelectedOrder(null);
+                    }}
+                    className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto">
         
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
@@ -148,8 +313,17 @@ const AdminOrders = () => {
               const total = order.totalAmount || 0;
               const unitCost = total > 0 ? total / qty : 0;
               const orderDate = order.createdAt?.toDate 
-                ? order.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+                ? order.createdAt.toDate().toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) 
                 : '---';
+              
+              // ✅ Use the stored category field (already cleaned)
+              const displayCategory = order.category || '';
 
               return (
                 <div key={order.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition-all relative overflow-hidden group">
@@ -166,7 +340,15 @@ const AdminOrders = () => {
                       </div>
                     </div>
                     
-                    <h3 className="text-sm md:text-base font-black text-gray-900 mb-1">{order.orderDetails}</h3>
+                    <div className="mb-3">
+                      <h3 className="text-sm md:text-base font-black text-gray-900 mb-1">{order.orderDetails}</h3>
+                      {displayCategory && (
+                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">
+                          Category: {displayCategory}
+                        </p>
+                      )}
+                    </div>
+                    
                     <p className="text-sm font-bold text-green-600 mb-4 uppercase tracking-tight">{order.customerName}</p>
 
                     {order.status === 'delivered' && (
@@ -228,7 +410,7 @@ const AdminOrders = () => {
                   <div className="mt-6 flex gap-2">
                     {order.status !== 'delivered' && (
                       <button 
-                        onClick={() => updateStatus(order)}
+                        onClick={() => handleMarkDeliveryClick(order)}
                         className="flex-1 bg-green-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-green-700 shadow-lg shadow-green-100 transition-all active:scale-95"
                       >
                         <CheckCircleIcon className="w-5 h-5" /> Mark Delivered

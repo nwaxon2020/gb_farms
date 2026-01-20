@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { db, auth } from '@/lib/firebaseConfig' // Ensure auth is exported from your config
+import { db, auth } from '@/lib/firebaseConfig'
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { 
   collection, 
@@ -80,7 +80,6 @@ export default function MasterBookkeeping() {
     return () => { unsubCats(); unsubOrders(); }
   }, [])
 
-  // ✅ NEW LOGIC: VERIFY PASSWORD AGAINST LOGIN ACCOUNT
   const verifyCEO = async () => {
     const user = auth.currentUser;
     if (!user || !user.email) {
@@ -97,7 +96,14 @@ export default function MasterBookkeeping() {
     }
   };
 
-  const getCleanBreed = (fullName: string) => fullName ? fullName.split('(')[0].trim() : "Unknown";
+  // ✅ SIMPLIFIED: Just get category name directly
+  const getCategoryName = (fullName: string) => {
+    if (!fullName) return "Unknown";
+    // If it's already a clean category (from walk-in), return as is
+    if (categories.some(cat => cat.name === fullName)) return fullName;
+    // Otherwise, get the first word before any parentheses
+    return fullName.split('(')[0].trim();
+  };
 
   const openInventory = () => {
     setShowInventoryHistory(true);
@@ -110,10 +116,11 @@ export default function MasterBookkeeping() {
     setHistorySearch('');
   }
 
+  // ✅ UPDATED: Find category by name directly
   const activeAnimal = useMemo(() => {
     if (!walkInForm.category) return null;
-    const searchName = getCleanBreed(walkInForm.category).toLowerCase();
-    return categories.find(c => c.name.toLowerCase().trim() === searchName);
+    const categoryName = getCategoryName(walkInForm.category);
+    return categories.find(c => c.name.toLowerCase().trim() === categoryName.toLowerCase().trim());
   }, [categories, walkInForm.category]);
 
   const isOverStock = activeAnimal && !lastOrderId ? walkInForm.qty > activeAnimal.stockQty : false;
@@ -192,7 +199,7 @@ export default function MasterBookkeeping() {
       if (date.toDateString() === todayStr) {
         acc.daily += amount;
         totalQtyToday += qty;
-        const catName = getCleanBreed(order.orderDetails);
+        const catName = getCategoryName(order.orderDetails);
         categoryQty[catName] = (categoryQty[catName] || 0) + qty;
       }
       if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) acc.monthly += amount;
@@ -229,17 +236,30 @@ export default function MasterBookkeeping() {
     if (isOverStock) return toast.error("Reduce quantity to match stock!");
     const tId = toast.loading("Processing...");
     try {
-      const cleanBreed = getCleanBreed(walkInForm.category);
+      const categoryName = getCategoryName(walkInForm.category);
       const orderRef = await addDoc(collection(db, "customersOrders"), {
-        customerName: walkInForm.name, phone: walkInForm.phone, address: "Walk-in (In-Store)",
-        orderDetails: cleanBreed, quantity: walkInForm.qty, totalAmount: currentTotal,
-        status: 'delivered', createdAt: serverTimestamp()
+        customerName: walkInForm.name, 
+        phone: walkInForm.phone, 
+        address: "Walk-in (In-Store)",
+        orderDetails: categoryName, // Store clean category name
+        quantity: walkInForm.qty, 
+        totalAmount: currentTotal,
+        status: 'delivered', 
+        createdAt: serverTimestamp()
       });
-      await updateDoc(doc(db, "livestockCategories", activeAnimal.id), { stockQty: increment(-Number(walkInForm.qty)) });
+      
+      // ✅ UPDATED: Update stock using category ID
+      await updateDoc(doc(db, "livestockCategories", activeAnimal.id), { 
+        stockQty: increment(-Number(walkInForm.qty)) 
+      });
+      
       setLastOrderId(orderRef.id);
       setShowConfirmSale(false);
       toast.success("Sold!", { id: tId });
-    } catch (err) { toast.error("Error"); }
+    } catch (err) { 
+      console.error("Sale error:", err);
+      toast.error("Error processing sale"); 
+    }
   }
 
   const handleSaveStock = async (e: React.FormEvent) => {
@@ -247,13 +267,24 @@ export default function MasterBookkeeping() {
     const tId = toast.loading("Updating...");
     try {
       const existingDoc = categories.find(c => c.name === selectedCategory);
-      await updateDoc(doc(db, "livestockCategories", existingDoc.id), { unitPrice: Number(unitPriceInput), stockQty: increment(Number(stockQty)) });
-      toast.success("Updated!"); setSelectedCategory(''); setUnitPriceInput(''); setStockQty(''); setShowAddForm(false);
-    } catch (err) { toast.error("Failed"); }
+      await updateDoc(doc(db, "livestockCategories", existingDoc.id), { 
+        unitPrice: Number(unitPriceInput), 
+        stockQty: increment(Number(stockQty)) 
+      });
+      toast.success("Updated!"); 
+      setSelectedCategory(''); 
+      setUnitPriceInput(''); 
+      setStockQty(''); 
+      setShowAddForm(false);
+    } catch (err) { 
+      toast.error("Failed to update stock"); 
+    }
   }
 
   const handleQuickAdjust = (id: string, amount: number) => {
-    updateDoc(doc(db, "livestockCategories", id), { stockQty: increment(amount) }).catch(() => toast.error("Error"));
+    updateDoc(doc(db, "livestockCategories", id), { 
+      stockQty: increment(amount) 
+    }).catch(() => toast.error("Error adjusting stock"));
   }
 
   return (
@@ -338,14 +369,14 @@ export default function MasterBookkeeping() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left font-bold text-sm">
                         <thead className="bg-gray-50 text-[10px] uppercase text-gray-400">
-                            <tr><th className="p-8">Date</th><th className="p-8">Transaction</th><th className="p-8">Breed</th><th className="p-8">Revenue</th><th className="p-8 text-right">Delete</th></tr>
+                            <tr><th className="p-8">Date</th><th className="p-8">Transaction</th><th className="p-8">Category</th><th className="p-8">Revenue</th><th className="p-8 text-right">Delete</th></tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredHistory.map((order) => (
                                 <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="p-8 text-gray-400 font-black text-[10px] uppercase">{order.createdAt?.toDate().toLocaleDateString('en-GB')}</td>
                                     <td className="p-8"><div className="text-gray-900 uppercase text-xs font-black">{order.customerName}</div><div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">{order.phone}</div></td>
-                                    <td className="p-8"><div className="inline-flex flex-col"><span className="text-emerald-700 text-xs font-black uppercase">{getCleanBreed(order.orderDetails)}</span><span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest italic">Qty: {order.quantity}</span></div></td>
+                                    <td className="p-8"><div className="inline-flex flex-col"><span className="text-emerald-700 text-xs font-black uppercase">{getCategoryName(order.orderDetails)}</span><span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest italic">Qty: {order.quantity}</span></div></td>
                                     <td className="p-8 font-black text-emerald-900 text-base">₦{order.totalAmount?.toLocaleString()}</td>
                                     <td className="p-8 text-right">
                                         <button onClick={() => setItemToDelete(order.id)} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><TrashIcon className="w-5 h-5" /></button>
@@ -363,13 +394,13 @@ export default function MasterBookkeeping() {
               <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 transition-all duration-500 ${lastOrderId ? 'bg-black' : 'bg-emerald-950/60 backdrop-blur-sm'}`}>
                 <div className="bg-white w-full max-w-md rounded-xl overflow-hidden shadow-2xl relative">
                   {isOverStock && !lastOrderId && (
-                    <div className="p-4 bg-red-600 text-white flex items-center gap-3 animate-in slide-in-from-top"><ExclamationCircleIcon className="w-6 h-6 shrink-0" /><div className="text-[10px] font-black uppercase leading-tight">Error: Only {activeAnimal.stockQty} left.</div></div>
+                    <div className="p-4 bg-red-600 text-white flex items-center gap-3 animate-in slide-in-from-top"><ExclamationCircleIcon className="w-6 h-6 shrink-0" /><div className="text-[10px] font-black uppercase leading-tight">Error: Only {activeAnimal?.stockQty || 0} left.</div></div>
                   )}
                   {showConfirmSale && !lastOrderId && (
                     <div className="absolute inset-0 z-[210] bg-white p-8 flex flex-col items-center justify-center text-center animate-in zoom-in duration-300">
                       <div className="w-16 h-16 bg-amber-100 rounded-xl flex items-center justify-center mb-4"><ExclamationTriangleIcon className="w-10 h-10 text-amber-600" /></div>
                       <h3 className="text-xl font-black text-gray-900 uppercase mb-2">Finalize Sale?</h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase mb-6 px-4">Qty <span className="text-emerald-700">{walkInForm.qty} {getCleanBreed(walkInForm.category)}</span><br /> Total: <span className="text-emerald-700">₦{currentTotal.toLocaleString()}</span></p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase mb-6 px-4">Qty <span className="text-emerald-700">{walkInForm.qty} {getCategoryName(walkInForm.category)}</span><br /> Total: <span className="text-emerald-700">₦{currentTotal.toLocaleString()}</span></p>
                       <div className="w-full space-y-3">
                         <button onClick={processFinalSale} className="w-full py-4 bg-emerald-900 text-white rounded-xl font-black text-xs uppercase shadow-xl transition-all">Confirm Sale</button>
                         <button onClick={() => setShowConfirmSale(false)} className="w-full py-4 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase">Go Back</button>
@@ -387,11 +418,17 @@ export default function MasterBookkeeping() {
                     </div>
                   ) : (
                     <div className="p-6">
-                      <div className="bg-emerald-900 p-4 rounded-xl mb-4 text-white flex justify-between items-center shadow-inner"><div className="text-left"><p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Bill</p><p className="font-black text-lg text-emerald-300">₦{currentTotal.toLocaleString()}</p></div><p className="font-bold text-xs uppercase tracking-widest">{getCleanBreed(walkInForm.category) || "---"}</p></div>
+                      <div className="bg-emerald-900 p-4 rounded-xl mb-4 text-white flex justify-between items-center shadow-inner"><div className="text-left"><p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Bill</p><p className="font-black text-lg text-emerald-300">₦{currentTotal.toLocaleString()}</p></div><p className="font-bold text-xs uppercase tracking-widest">{getCategoryName(walkInForm.category) || "---"}</p></div>
                       <form onSubmit={(e) => { e.preventDefault(); setShowConfirmSale(true); }} className="space-y-3">
                         <input required placeholder="Customer Name" className="w-full p-4 bg-gray-50 rounded-xl outline-none font-bold text-sm border focus:ring-1 focus:ring-emerald-500" onChange={e => setWalkInForm({...walkInForm, name: e.target.value})} />
                         <input required placeholder="Phone Number" className="w-full p-4 bg-gray-50 rounded-xl outline-none font-bold text-sm border focus:ring-1 focus:ring-emerald-500" onChange={e => setWalkInForm({...walkInForm, phone: e.target.value})} />
-                        <div className="grid grid-cols-2 gap-3"><select required className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" onChange={e => setWalkInForm({...walkInForm, category: e.target.value})}><option value="">Category</option>{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><input required type="number" min="1" placeholder="Qty" className={`p-4 rounded-xl font-bold text-sm border outline-none ${isOverStock ? 'bg-red-50 border-red-500 text-red-600' : 'bg-gray-50'}`} onChange={e => setWalkInForm({...walkInForm, qty: parseInt(e.target.value) || 1})} /></div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <select required className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" onChange={e => setWalkInForm({...walkInForm, category: e.target.value})}>
+                            <option value="">Category</option>
+                            {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                          </select>
+                          <input required type="number" min="1" placeholder="Qty" className={`p-4 rounded-xl font-bold text-sm border outline-none ${isOverStock ? 'bg-red-50 border-red-500 text-red-600' : 'bg-gray-50'}`} onChange={e => setWalkInForm({...walkInForm, qty: parseInt(e.target.value) || 1})} />
+                        </div>
                         <button type="submit" disabled={isOverStock} className={`w-full py-5 rounded-xl font-black text-xs uppercase shadow-xl transition-all ${isOverStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-emerald-900 text-white active:scale-95'}`}>{isOverStock ? 'Low Stock' : 'Complete Sale'}</button>
                       </form>
                     </div>
@@ -403,16 +440,36 @@ export default function MasterBookkeeping() {
             {showAddForm && (
               <div className="bg-white p-6 rounded-xl shadow-xl mb-12 border border-emerald-100 animate-in slide-in-from-top-2 duration-300">
                 <form onSubmit={handleSaveStock} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex flex-col gap-1"><label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Animal</label><select required className="p-4 bg-gray-50 rounded-xl font-bold text-sm border appearance-none" value={selectedCategory} onChange={(e) => handleCategoryChange(e.target.value)}><option value="">Category</option>{categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}</select></div>
-                  <div className="flex flex-col gap-1"><label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Unit Price</label><input required type="number" className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" value={unitPriceInput} onChange={e => setUnitPriceInput(e.target.value)} /></div>
-                  <div className="flex flex-col gap-1"><label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Qty to Add</label><input required type="number" className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" value={stockQty} onChange={e => setStockQty(e.target.value)} /></div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Category</label>
+                    <select required className="p-4 bg-gray-50 rounded-xl font-bold text-sm border appearance-none" value={selectedCategory} onChange={(e) => handleCategoryChange(e.target.value)}>
+                      <option value="">Select Category</option>
+                      {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Unit Price</label>
+                    <input required type="number" className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" value={unitPriceInput} onChange={e => setUnitPriceInput(e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Qty to Add</label>
+                    <input required type="number" className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" value={stockQty} onChange={e => setStockQty(e.target.value)} />
+                  </div>
                   <button type="submit" className="md:col-span-3 w-full bg-emerald-600 text-white py-4 rounded-xl font-black text-xs uppercase shadow-lg transition-all active:scale-95">Update Inventory</button>
                 </form>
               </div>
             )}
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-              <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 className="font-black text-gray-900 uppercase text-[10px] tracking-widest flex items-center gap-2"><TagIcon className="w-4 h-4 text-emerald-600" /> Stock Table</h2><div className="relative w-full md:w-64"><MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" /><input type="text" placeholder="Search animal..." className="w-full pl-9 pr-4 py-2.5 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500 text-xs font-bold transition-all outline-none uppercase" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div></div>
+              <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h2 className="font-black text-gray-900 uppercase text-[10px] tracking-widest flex items-center gap-2">
+                  <TagIcon className="w-4 h-4 text-emerald-600" /> Stock Table
+                </h2>
+                <div className="relative w-full md:w-64">
+                  <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                  <input type="text" placeholder="Search category..." className="w-full pl-9 pr-4 py-2.5 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500 text-xs font-bold transition-all outline-none uppercase" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+              </div>
               
               {/* MOBILE VIEW CARDS */}
               <div className="grid grid-cols-1 divide-y divide-gray-100 md:hidden">
@@ -448,7 +505,7 @@ export default function MasterBookkeeping() {
                 <table className="w-full text-left font-bold text-sm">
                   <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
                     <tr>
-                      <th className="p-6">Breed</th>
+                      <th className="p-6">Category</th>
                       <th className="p-6">Price</th>
                       <th className="p-6 text-center">Stock</th>
                       <th className="p-6 text-right">Action</th>
@@ -488,7 +545,23 @@ export default function MasterBookkeeping() {
               </button>
               {showSales && (
                 <div className="p-6 pt-2 animate-in slide-in-from-top-4 duration-500 border-t border-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 pt-8 text-center"><div className="bg-emerald-50/50 p-6 rounded-xl border border-emerald-100 text-center"><p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Today Revenue</p><p className="text-[8px] font-bold text-emerald-400 mb-3">{salesStats.todayFormatted}</p><p className="text-2xl font-black text-emerald-900">₦{salesStats.daily.toLocaleString()}</p></div><div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 text-center"><p className="text-[10px] font-black text-blue-600 uppercase mb-1">Items Sold Today</p><p className="text-[8px] font-bold text-blue-400 mb-3">{salesStats.totalQtyToday} Total Qty</p><p className="text-2xl font-black text-blue-900">₦{salesStats.monthly.toLocaleString()}</p></div><div className="bg-purple-50/50 p-6 rounded-xl border border-purple-100 text-center"><p className="text-[10px] font-black text-purple-600 uppercase mb-1">Annual Total</p><p className="text-[8px] font-bold text-purple-400 mb-3">{salesStats.yearFormatted}</p><p className="text-2xl font-black text-purple-900">₦{salesStats.yearly.toLocaleString()}</p></div></div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 pt-8 text-center">
+                    <div className="bg-emerald-50/50 p-6 rounded-xl border border-emerald-100 text-center">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Today Revenue</p>
+                      <p className="text-[8px] font-bold text-emerald-400 mb-3">{salesStats.todayFormatted}</p>
+                      <p className="text-2xl font-black text-emerald-900">₦{salesStats.daily.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 text-center">
+                      <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Items Sold Today</p>
+                      <p className="text-[8px] font-bold text-blue-400 mb-3">{salesStats.totalQtyToday} Total Qty</p>
+                      <p className="text-2xl font-black text-blue-900">₦{salesStats.monthly.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-purple-50/50 p-6 rounded-xl border border-purple-100 text-center">
+                      <p className="text-[10px] font-black text-purple-600 uppercase mb-1">Annual Total</p>
+                      <p className="text-[8px] font-bold text-purple-400 mb-3">{salesStats.yearFormatted}</p>
+                      <p className="text-2xl font-black text-purple-900">₦{salesStats.yearly.toLocaleString()}</p>
+                    </div>
+                  </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2 space-y-6">

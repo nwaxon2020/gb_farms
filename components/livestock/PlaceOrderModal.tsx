@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { db, auth } from '@/lib/firebaseConfig'
-import { collection, addDoc, serverTimestamp, doc, onSnapshot } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, doc, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { XMarkIcon, ChatBubbleLeftRightIcon, UserIcon, PhoneIcon, MapPinIcon, EnvelopeIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  animalDetails: string; // The full string from the store
+  animalDetails: string; // Full string like "Large White (Premium breed, 30kg)"
   price: number; 
 }
 
@@ -26,79 +26,107 @@ export default function PlaceOrderModal({ isOpen, onClose, animalDetails, price 
     quantity: '1' 
   })
 
-  // ✅ NEW LOGIC: Clean the name for the Error Message
-  // This removes anything in brackets like "(2kg, Natural feeds...)"
-  const cleanAnimalName = animalDetails.split('(')[0].trim();
+  // ✅ NEW: Extract category from animal details
+  const extractCategory = (fullName: string): string => {
+    if (!fullName) return "";
+    // Remove everything in parentheses and trim
+    return fullName.split('(')[0].trim();
+  };
 
+  const categoryName = extractCategory(animalDetails);
   const unitPrice = price || 0;
   const requestedQty = parseInt(formData.quantity) || 0;
   const totalAmount = unitPrice * requestedQty;
 
-  const isOutOfStock = availableStock !== null && (availableStock === 0 || requestedQty > availableStock);
+  // Stock check logic
+  const isOutOfStock = availableStock !== null && (availableStock <= 0 || requestedQty > availableStock);
 
   useEffect(() => {
     if (!isOpen) {
       setAvailableStock(null);
+      setFormData(prev => ({ ...prev, quantity: '1' }));
       return;
     }
 
-    // 1. Fetch Admin Contact
+    // 1. Fetch Contact Phone
     const unsubContact = onSnapshot(doc(db, "settings", "contact"), (docSnap) => {
       if (docSnap.exists()) setEnquiryPhone(docSnap.data().phoneNumber || '')
-    })
+    });
 
-    // 2. Fetch Stock and match with Clean Name
+    // 2. ✅ FIXED: Real-time Stock Sync by Category Name
     const unsubStock = onSnapshot(collection(db, "livestockCategories"), (snapshot) => {
       const allStock = snapshot.docs.map(d => ({ 
-        dbName: d.data().name.toLowerCase().trim(), 
-        qty: d.data().stockQty 
+        id: d.id,
+        name: d.data().name, // Category name like "Pig", "Goat", etc.
+        stockQty: Number(d.data().stockQty) || 0 
       }));
 
-      const searchBreed = cleanAnimalName.toLowerCase();
+      console.log('Available categories:', allStock.map(s => s.name));
+      console.log('Looking for category:', categoryName);
 
-      // Find the match in bookkeeping
+      // Find exact match by category name
       const match = allStock.find(item => 
-        searchBreed.includes(item.dbName) || item.dbName.includes(searchBreed)
+        item.name.toLowerCase() === categoryName.toLowerCase()
       );
 
       if (match) {
-        setAvailableStock(Number(match.qty));
+        console.log('✅ Stock match found:', match);
+        setAvailableStock(match.stockQty);
       } else {
-        setAvailableStock(0); 
+        console.log('❌ No stock found for category:', categoryName);
+        setAvailableStock(0);
       }
     });
 
     return () => {
       unsubContact();
       unsubStock();
-    }
-  }, [isOpen, cleanAnimalName])
+    };
+  }, [isOpen, animalDetails, categoryName]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.error("Please login first");
-    if (isOutOfStock) return toast.error(`${cleanAnimalName} is Out of stock`);
+    if (isOutOfStock) {
+      const msg = availableStock === 0 
+        ? `${categoryName} is currently out of stock` 
+        : `Only ${availableStock} ${categoryName}(s) available`;
+      return toast.error(msg);
+    }
     
     setLoading(true);
     const tId = toast.loading("Processing order...");
 
     try {
+      // First, verify stock is still available
+      const categoriesSnap = await getDocs(collection(db, "livestockCategories"));
+      const categoryDoc = categoriesSnap.docs.find(doc => 
+        doc.data().name.toLowerCase() === categoryName.toLowerCase()
+      );
+
+      if (!categoryDoc || categoryDoc.data().stockQty < requestedQty) {
+        toast.error("Stock quantity has changed. Please refresh and try again.", { id: tId });
+        setLoading(false);
+        return;
+      }
+
       await addDoc(collection(db, "customersOrders"), {
         userId: user.uid,
         customerName: formData.name,
         phone: formData.phone,
         email: formData.email,
         address: formData.address,
-        quantity: formData.quantity,
+        quantity: requestedQty,
         totalAmount: totalAmount, 
-        orderDetails: animalDetails, // We keep the full details for the admin order
+        orderDetails: animalDetails,
+        category: categoryName, // Store category for reporting
         status: 'pending',
         createdAt: serverTimestamp(),
       });
 
-      const message = `*NEW ORDER ENQUIRY*%0A%0A*Animal:* ${animalDetails}%0A*Quantity:* ${formData.quantity}%0A*Total Amount:* ₦${totalAmount.toLocaleString()}%0A%0A*Customer Details:*%0A- Name: ${formData.name}%0A- Phone: ${formData.phone}%0A- Address: ${formData.address}`;
+      const message = `*NEW ORDER ENQUIRY*%0A%0A*Animal:* ${animalDetails}%0A*Category:* ${categoryName}%0A*Quantity:* ${requestedQty}%0A*Total Amount:* ₦${totalAmount.toLocaleString()}%0A%0A*Customer Details:*%0A- Name: ${formData.name}%0A- Phone: ${formData.phone}%0A- Address: ${formData.address}`;
       
       toast.success("Order recorded!", { id: tId });
       window.open(`https://wa.me/${enquiryPhone}?text=${message}`, '_blank');
@@ -108,46 +136,46 @@ export default function PlaceOrderModal({ isOpen, onClose, animalDetails, price 
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 font-sans">
       <div className="absolute inset-0 bg-emerald-950/40 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative bg-white w-full max-w-lg rounded-lg shadow-2xl overflow-hidden border border-emerald-100 animate-in fade-in zoom-in duration-300">
+      <div className="relative bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden border border-emerald-100 animate-in fade-in zoom-in duration-300">
         
-        {/* ✅ CLEAN ERROR MSG: Now shows "Broiler is Out of stock" */}
-        {isOutOfStock && (
-          <div className="bg-red-600 text-white p-3 flex items-center gap-3 animate-in slide-in-from-top duration-300">
-            <ExclamationCircleIcon className="w-5 h-5 shrink-0" />
+        {/* Stock Status Banner */}
+        <div className={`p-3 flex items-center gap-3 ${availableStock === null ? 'bg-gray-100' : isOutOfStock ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
+          <ExclamationCircleIcon className="w-5 h-5 shrink-0" />
+          <div className="flex-1">
             <p className="text-xs font-black uppercase tracking-widest leading-tight">
-              {availableStock === 0 ? `${cleanAnimalName} is Out of stock` : `Only ${availableStock} left in stock`}
+              {availableStock === null ? 'Checking stock availability...' : 
+               availableStock === 0 ? `${categoryName} is Out of stock` : 
+               requestedQty > availableStock ? `Only ${availableStock} ${categoryName}(s) available` :
+               `✓ ${availableStock} ${categoryName}(s) in stock`}
             </p>
           </div>
-        )}
+        </div>
 
-        <div className="bg-emerald-600 p-4 py-3 text-white">
-          <div className="flex justify-between items-center">
+        <div className="bg-emerald-600 p-4 py-3 text-white flex justify-between items-center">
             <div>
               <h2 className="text-xl font-black">Finalize Order</h2>
-              <p className="-mt-1 text-emerald-100 text-xs font-medium">Review your total and proceed. <br /> </p>
+              <p className="-mt-1 text-emerald-100 text-xs font-medium">Review and complete your purchase.</p>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
               <XMarkIcon className="w-6 h-6 text-white" />
             </button>
-            
-          </div>
         </div>
 
         <div className="p-4 py-3">
           <div className="bg-emerald-900 p-4 py-3 rounded-lg mb-4 shadow-inner flex justify-between items-center text-white">
             <div className="flex-1">
-              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Item Details</p>
+              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Livestock Selection</p>
               <p className="font-bold text-xs md:text-sm line-clamp-1">{animalDetails}</p>
-              <p className="text-[10px] text-emerald-200 mt-1 font-bold italic">Unit Price: ₦{unitPrice.toLocaleString()}</p>
+              <p className="text-[10px] text-emerald-200 mt-1 font-bold italic">Category: {categoryName}</p>
             </div>
             <div className="text-right pl-4 border-l border-emerald-800">
-               <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Total Bill</p>
+               <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Estimated Total</p>
                <p className="font-black text-base md:text-xl text-emerald-300">₦{totalAmount.toLocaleString()}</p>
             </div>
           </div>
@@ -167,7 +195,7 @@ export default function PlaceOrderModal({ isOpen, onClose, animalDetails, price 
               </div>
               <div className="relative">
                 <span className="text-xs absolute left-4 top-4 font-bold text-emerald-600 uppercase">Qty</span>
-                <input required type="number" min="1" 
+                <input required type="number" min="1" max={availableStock || undefined}
                   className={`w-full pl-12 pr-4 py-3.5 rounded-lg outline-none ring-1 transition-all font-bold text-sm ${isOutOfStock ? 'bg-red-50 ring-red-500 text-red-600' : 'bg-gray-50 ring-gray-100 focus:ring-emerald-500'}`}
                   value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} 
                 />
@@ -198,5 +226,5 @@ export default function PlaceOrderModal({ isOpen, onClose, animalDetails, price 
         </div>
       </div>
     </div>
-  )
+  );
 }
