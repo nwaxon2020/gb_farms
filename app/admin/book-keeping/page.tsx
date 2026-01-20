@@ -120,7 +120,6 @@ export default function MasterBookkeeping() {
   const currentTotal = (activeAnimal?.unitPrice || 0) * (Number(walkInForm.qty) || 0);
 
   const handleSingleDelete = async () => {
-    // Logic updated to use verifyCEO
     const isVerified = await verifyCEO();
     if (isVerified) {
       await deleteDoc(doc(db, "customersOrders", itemToDelete!));
@@ -131,7 +130,6 @@ export default function MasterBookkeeping() {
   }
 
   const handleWipeHistory = async () => {
-    // Logic updated to use verifyCEO
     const isVerified = await verifyCEO();
     if (isVerified) {
       const tId = toast.loading("Processing...");
@@ -262,7 +260,7 @@ export default function MasterBookkeeping() {
     <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-3 md:px-8 font-sans"> 
 
       {/* Back button */}
-      <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-2 transition-colors group">
+      <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-4 md:mb-2 transition-colors group">
         <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
         <span>Back</span>
       </button> 
@@ -275,7 +273,7 @@ export default function MasterBookkeeping() {
                 <h2 className="text-2xl font-black uppercase text-gray-900 tracking-tighter">Authorize Wipe</h2>
                 <input type="password" placeholder="CEO Password" className="w-full mt-6 p-5 bg-gray-50 border-2 rounded-xl text-center font-black outline-none focus:border-red-500" onChange={e => setCeoPass(e.target.value)} />
                 <button onClick={handleWipeHistory} className="w-full mt-4 bg-red-600 text-white py-5 rounded-xl font-black uppercase text-xs">Execute Wipe</button>
-                <button onClick={() => setShowClearOverlay(false)} className="mt-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Cancel</button>
+                <button onClick={() => setShowClearOverlay(false)} className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cancel</button>
             </div>
         </div>
       )}
@@ -287,7 +285,7 @@ export default function MasterBookkeeping() {
                 <h2 className="text-xl font-black uppercase text-gray-900 tracking-tighter">CEO Authentication</h2>
                 <input type="password" placeholder="CEO Password" className="w-full mt-6 p-5 bg-gray-50 border-2 rounded-xl text-center font-black outline-none focus:border-amber-500" onChange={e => setCeoPass(e.target.value)} />
                 <button onClick={handleSingleDelete} className="w-full mt-4 bg-emerald-900 text-white py-5 rounded-xl font-black uppercase text-xs">Delete Record</button>
-                <button onClick={() => setItemToDelete(null)} className="mt-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">Go Back</button>
+                <button onClick={() => setItemToDelete(null)} className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Go Back</button>
             </div>
         </div>
       )}
@@ -415,6 +413,37 @@ export default function MasterBookkeeping() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
               <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 className="font-black text-gray-900 uppercase text-[10px] tracking-widest flex items-center gap-2"><TagIcon className="w-4 h-4 text-emerald-600" /> Stock Table</h2><div className="relative w-full md:w-64"><MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" /><input type="text" placeholder="Search animal..." className="w-full pl-9 pr-4 py-2.5 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 focus:ring-2 focus:ring-emerald-500 text-xs font-bold transition-all outline-none uppercase" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div></div>
+              
+              {/* MOBILE VIEW CARDS */}
+              <div className="grid grid-cols-1 divide-y divide-gray-100 md:hidden">
+                {filteredCategories.map((cat) => (
+                  <div key={cat.id} className="p-6 flex flex-col gap-4 bg-white">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-gray-900 font-black uppercase text-xs tracking-tight mb-1">{cat.name}</h3>
+                        <p className="text-emerald-800 font-black text-sm">₦{cat.unitPrice?.toLocaleString()}</p>
+                      </div>
+                      <button onClick={() => confirmDelete(cat)} className="p-2 bg-red-50 text-red-600 rounded-lg shadow-sm">
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl">
+                      <span className="text-[10px] font-black uppercase text-gray-400">In Stock</span>
+                      <div className="flex items-center gap-6">
+                        <button onClick={() => handleQuickAdjust(cat.id, -1)} className="text-gray-400 hover:text-red-600 transition-colors">
+                          <MinusIcon className="w-5 h-5" />
+                        </button>
+                        <span className={`min-w-[20px] text-center font-black text-base ${cat.stockQty < 5 ? 'text-red-500' : 'text-gray-900'}`}>{cat.stockQty}</span>
+                        <button onClick={() => handleQuickAdjust(cat.id, 1)} className="text-gray-400 hover:text-emerald-600 transition-colors">
+                          <PlusIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP TABLE VIEW */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left font-bold text-sm">
                   <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">

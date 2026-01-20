@@ -4,32 +4,52 @@ import Link from 'next/link'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { auth, db } from '@/lib/firebaseConfig'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { Bars3Icon, XMarkIcon, ArrowRightStartOnRectangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
+import { Bars3Icon, XMarkIcon, ArrowRightStartOnRectangleIcon, ShieldCheckIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ChevronDown } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [user] = useAuthState(auth)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [profileName, setProfileName] = useState('')
   const router = useRouter()
+  const pathname = usePathname()
 
+  // ✅ Live Search Logic (Filters as user types)
+  useEffect(() => {
+    if (searchQuery.trim() !== '') {
+      router.push(`/livestock?search=${encodeURIComponent(searchQuery.trim())}`);
+    } else if (searchQuery === '' && pathname === '/livestock') {
+      router.push('/livestock'); 
+    }
+  }, [searchQuery, router, pathname]);
+
+  // ✅ Role & Name Verification (CEO vs Staff)
   useEffect(() => {
     const checkAdminStatus = async () => {
       const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID;
-      if (!user) { setIsAdmin(false); return; }
-      if (user.uid === CEO_ID) { setIsAdmin(true); return; }
-      const usedPassword = user.providerData.some(p => p.providerId === 'password');
-      if (usedPassword && user.email) {
-        const q = query(collection(db, "adminStaff"), where("email", "==", user.email.toLowerCase()));
-        const snap = await getDocs(q);
-        setIsAdmin(!snap.empty);
+      if (!user) { setIsAdmin(false); setProfileName(''); return; }
+      
+      if (user.uid === CEO_ID) {
+        setIsAdmin(true);
+        setProfileName('CEO');
       } else {
-        setIsAdmin(false);
+        // Fetch staff name from database
+        const staffDoc = await getDoc(doc(db, "adminStaff", user.uid));
+        if (staffDoc.exists() && staffDoc.data().role === 'Admin') {
+          setIsAdmin(true);
+          setProfileName(staffDoc.data().name || 'Staff');
+        } else {
+          setIsAdmin(false);
+          setProfileName(user.displayName?.split(' ')[0] || 'User');
+        }
       }
     };
     checkAdminStatus();
@@ -73,7 +93,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           
-          {/* Logo */}
+          {/* Logo (Original) */}
           <Link href="/" className="flex items-center space-x-2 md:space-x-3 group">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
               <span className="text-white font-bold text-xl md:text-2xl">F</span>
@@ -84,7 +104,21 @@ const Navbar = () => {
             </div>
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Search (New Logic, Vibrant UI) */}
+          <div className="hidden md:flex flex-1 justify-center max-w-sm mx-4">
+            <div className="relative w-full">
+              <input 
+                type="text" 
+                placeholder="Search breed or category..." 
+                className="w-full bg-green-100 border-2 border-green-200 rounded-full py-2 px-10 text-xs focus:ring-4 focus:ring-green-500/10 focus:bg-white transition-all outline-none font-bold text-green-900"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <MagnifyingGlassIcon className="w-4 h-4 text-green-600 absolute left-4 top-2.5" />
+            </div>
+          </div>
+
+          {/* Desktop Navigation (Original Links) */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link key={link.name} href={link.href} className="relative text-gray-700 hover:text-green-600 font-medium transition-colors group">
@@ -95,22 +129,21 @@ const Navbar = () => {
             
             {user ? (
               <div className="relative flex items-center">
-                {/* Desktop Profile Button */}
+                {/* Desktop Profile Button (Original Style) */}
                 <div className="flex items-center bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
                   <button 
                     onClick={() => isAdmin ? router.push('/admin') : setUserMenuOpen(!userMenuOpen)} 
                     className="flex items-center space-x-2 px-3 py-2 hover:bg-gray-100 transition-colors"
                   >
                     <img 
-                      src={isAdmin ? 'https://ui-avatars.com/api/?name=Admin&background=D4AF37&color=fff' : (user.photoURL || 'https://ui-avatars.com/api/?name=User&background=10B981&color=fff')} 
+                      src={isAdmin ? `https://ui-avatars.com/api/?name=${profileName}&background=D4AF37&color=fff` : (user.photoURL || `https://ui-avatars.com/api/?name=${profileName}&background=10B981&color=fff`)} 
                       alt="User" className={`w-8 h-8 rounded-full border-2 ${isAdmin ? 'border-amber-400' : 'border-green-100'}`} 
                     />
                     <div className="text-left text-sm font-bold">
-                      <span className={isAdmin ? 'text-amber-600' : 'text-gray-900'}>{isAdmin ? 'Admin' : (user.displayName?.split(' ')[0])}</span>
+                      <span className={isAdmin ? 'text-amber-600' : 'text-gray-900'}>{profileName}</span>
                     </div>
                   </button>
 
-                  {/* Desktop Dropdown Arrow - Only handles Logout menu toggle */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -124,8 +157,12 @@ const Navbar = () => {
                 
                 {userMenuOpen && (
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-50 mb-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Logged in as</p>
+                      <p className="text-xs font-bold text-gray-700 truncate">{user.email}</p>
+                    </div>
                     {isAdmin && (
-                      <Link href="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center space-x-3 w-full px-4 py-2 text-amber-700 hover:bg-amber-50 font-semibold border-b border-gray-50">
+                      <Link href="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center space-x-3 w-full px-4 py-2 text-amber-700 hover:bg-amber-50 font-semibold">
                         <ShieldCheckIcon className="w-5 h-5" /><span>Admin Dashboard</span>
                       </Link>
                     )}
@@ -140,20 +177,24 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile Header: Profile & Menu Trigger */}
-          <div className="flex md:hidden items-center space-x-2">
+          {/* Mobile Header: Profile & Menu Trigger (Original) */}
+          <div className="flex md:hidden items-center space-x-1">
+            <button onClick={() => setSearchOpen(!searchOpen)} className="p-2 text-green-600 active:scale-90 transition-transform">
+               <MagnifyingGlassIcon className="w-6 h-6" />
+            </button>
+
             {user && (
               <button 
                 onClick={() => isAdmin ? router.push('/admin') : setIsOpen(!isOpen)}
                 className={`flex items-center space-x-1.5 py-1 px-1.5 rounded-full shadow-sm transition-all duration-300 active:scale-95 ${isAdmin ? 'bg-amber-50 shadow-amber-100/50' : 'bg-green-50 shadow-green-100/50'}`}
               >
                 <img 
-                  src={isAdmin ? 'https://ui-avatars.com/api/?name=Admin&background=D4AF37&color=fff' : (user.photoURL || 'https://ui-avatars.com/api/?name=User&background=10B981&color=fff')} 
+                  src={isAdmin ? `https://ui-avatars.com/api/?name=${profileName}&background=D4AF37&color=fff` : (user.photoURL || `https://ui-avatars.com/api/?name=${profileName}&background=10B981&color=fff`)} 
                   className="w-5 h-5 rounded-full" 
                   alt="Profile" 
                 />
                 <span className={`text-[9px] font-black tracking-tight ${isAdmin ? 'text-amber-700' : 'text-green-800'}`}>
-                  {isAdmin ? 'ADMIN' : (user.displayName?.split(' ')[0].toUpperCase())}
+                  {profileName.toUpperCase()}
                 </span>
               </button>
             )}
@@ -164,7 +205,22 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile Menu Dropdown */}
+        {/* Mobile Search Section (Vibrant Green) */}
+        <div className={`md:hidden transition-all duration-300 overflow-hidden ${searchOpen ? 'max-h-24 mt-3 pb-2' : 'max-h-0'}`}>
+           <div className="relative">
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Search livestock..." 
+                className="w-full bg-green-200/60 rounded-2xl py-4 px-12 text-sm border-none outline-none font-bold text-green-900"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <MagnifyingGlassIcon className="w-6 h-6 text-green-700 absolute left-4 top-3.5" />
+           </div>
+        </div>
+
+        {/* Mobile Menu Dropdown (Original) */}
         <div className={`md:hidden transition-all duration-300 overflow-hidden ${isOpen ? 'max-h-[500px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 space-y-4">
             {navLinks.map((link) => (
@@ -174,8 +230,11 @@ const Navbar = () => {
             {user ? (
               <div className="pt-4 border-t border-gray-100 space-y-3">
                 <div className={`flex items-center space-x-3 px-4 py-3 rounded-xl ${isAdmin ? 'bg-amber-50' : 'bg-gray-50'}`}>
-                  <img src={isAdmin ? 'https://ui-avatars.com/api/?name=Admin&background=D4AF37&color=fff' : (user.photoURL || 'https://ui-avatars.com/api/?name=User&background=10B981&color=fff')} className="w-10 h-10 rounded-full" alt="Profile" />
-                  <span className={`font-bold ${isAdmin ? 'text-amber-700' : 'text-gray-900'}`}>{isAdmin ? 'Admin' : user.displayName}</span>
+                  <img src={isAdmin ? `https://ui-avatars.com/api/?name=${profileName}&background=D4AF37&color=fff` : (user.photoURL || `https://ui-avatars.com/api/?name=${profileName}&background=10B981&color=fff`)} className="w-10 h-10 rounded-full" alt="Profile" />
+                  <div>
+                    <span className={`font-bold block ${isAdmin ? 'text-amber-700' : 'text-gray-900'}`}>{profileName}</span>
+                    <span className="text-[10px] text-gray-500">{user.email}</span>
+                  </div>
                 </div>
 
                 {isAdmin && (

@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { db, auth } from '@/lib/firebaseConfig'
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, updateDoc, increment, where, getDocs } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, updateDoc, increment, where } from 'firebase/firestore'
 import { useAuthState } from 'react-firebase-hooks/auth'
-import { signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { PaperAirplaneIcon, ChatBubbleLeftRightIcon, LockClosedIcon, ChevronLeftIcon, ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -18,61 +18,63 @@ const ChatInterface = () => {
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // ✅ Role Verification: CEO (Any method) or Staff (Password only)
+  // Role Verification
   useEffect(() => {
-    const verifyStaff = async () => {
-      if (user?.email) {
-        const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID;
-        const isPasswordUser = user.providerData.some(p => p.providerId === 'password');
-
-        // Master CEO bypasses provider check, Staff MUST use password
-        if (user.uid === CEO_ID || isPasswordUser) {
-          const q = query(collection(db, "adminStaff"), where("email", "==", user.email.toLowerCase()))
-          const snap = await getDocs(q)
-          setIsAdmin(!snap.empty || user.uid === CEO_ID)
-        } else {
-          setIsAdmin(false)
-        }
-      }
+    if (!user) {
+      setIsAdmin(false);
+      return;
     }
-    verifyStaff()
-  }, [user])
+    const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID;
+    if (user.uid === CEO_ID) {
+      setIsAdmin(true);
+      return;
+    }
+    const roleQuery = query(
+      collection(db, "adminStaff"), 
+      where("uid", "==", user.uid),
+      where("role", "==", "Admin")
+    );
+    const unsubStaff = onSnapshot(roleQuery, (snap) => {
+      setIsAdmin(!snap.empty);
+    });
+    return () => unsubStaff();
+  }, [user]);
 
-  const isCustomer = user && !isAdmin;
+  // Admin: Load all chats
+  useEffect(() => {
+    if (!isAdmin) {
+      setChats([]); 
+      return;
+    }
+    const q = query(collection(db, "chats"), orderBy("updatedAt", "desc"));
+    const unsubChats = onSnapshot(q, (snap) => {
+      setChats(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsubChats();
+  }, [isAdmin]);
 
-  // Monitor Admin Online Status
+  // Load Messages (Fixed stable dependency array)
+  useEffect(() => {
+    const targetId = isAdmin ? activeChatId : user?.uid;
+    if (!targetId) return;
+
+    const q = query(collection(db, "chats", targetId, "messages"), orderBy("createdAt", "asc"));
+    const unsubMsgs = onSnapshot(q, (snap) => {
+      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    if (isAdmin && activeChatId) {
+       updateDoc(doc(db, "chats", activeChatId), { unreadCount: 0 });
+    }
+    return () => unsubMsgs();
+  }, [activeChatId, user?.uid, isAdmin]); 
+
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "adminStaff"), (snap) => {
       setAdminsOnline(snap.docs.length > 0)
     })
     return () => unsub()
   }, [])
-
-  // Admin: Load all chat cards
-  useEffect(() => {
-    if (!isAdmin) return
-    const q = query(collection(db, "chats"), orderBy("updatedAt", "desc"))
-    return onSnapshot(q, (snap) => {
-      setChats(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
-  }, [isAdmin])
-
-  // Load Messages for active chat
-  useEffect(() => {
-    const targetId = isCustomer ? user?.uid : activeChatId
-    if (!targetId) return
-
-    const q = query(collection(db, "chats", targetId, "messages"), orderBy("createdAt", "asc"))
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
-
-    // Reset unread count if Admin opens the chat
-    if (isAdmin && activeChatId) {
-       updateDoc(doc(db, "chats", activeChatId), { unreadCount: 0 })
-    }
-    return () => unsub()
-  }, [activeChatId, user, isCustomer, isAdmin])
 
   const handleSelectChat = (id: string | null) => {
     setActiveChatId(id)
@@ -91,7 +93,7 @@ const ChatInterface = () => {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !user) return
-    const targetChatId = isCustomer ? user.uid : activeChatId
+    const targetChatId = isAdmin ? activeChatId : user.uid;
     if (!targetChatId) return
 
     const msgData = {
@@ -106,8 +108,8 @@ const ChatInterface = () => {
       await addDoc(collection(db, "chats", targetChatId, "messages"), msgData)
       await setDoc(doc(db, "chats", targetChatId), {
         lastMessage: newMessage,
-        userName: isCustomer ? user.displayName : (chats.find(c => c.id === activeChatId)?.userName || chats.find(c => c.id === activeChatId)?.userEmail),
-        userEmail: isCustomer ? user.email : chats.find(c => c.id === activeChatId)?.userEmail,
+        userName: !isAdmin ? user.displayName : (chats.find(c => c.id === activeChatId)?.userName || chats.find(c => c.id === activeChatId)?.userEmail),
+        userEmail: !isAdmin ? user.email : chats.find(c => c.id === activeChatId)?.userEmail,
         updatedAt: serverTimestamp(),
         unreadCount: isAdmin ? 0 : increment(1)
       }, { merge: true })
@@ -124,7 +126,7 @@ const ChatInterface = () => {
         <h3 className="text-2xl font-bold text-white mb-2 text-glow">Join the Chat</h3>
         <p className="text-gray-400 mb-8 text-sm max-w-xs">Sign in with Google to start a real-time conversation.</p>
         <button onClick={handleSignIn} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-3 active:scale-95">
-           <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="google" /> Continue with Google
+            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="google" /> Continue with Google
         </button>
       </div>
     )
@@ -133,7 +135,7 @@ const ChatInterface = () => {
   return (
     <div className="flex h-[600px] md:h-[500px] bg-gray-950 rounded-3xl shadow-2xl border border-emerald-900/30 overflow-hidden relative font-sans">
       
-      {/* Sidebar (List of Chats for Admin, "Farm Support" for Customer) */}
+      {/* Sidebar */}
       <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-emerald-900/20 bg-black/40 flex-col`}>
         <div className="p-5 bg-emerald-950/50 border-b border-emerald-900/20 flex items-center justify-between">
           <span className="font-black text-[10px] text-emerald-500 uppercase tracking-widest">
@@ -150,30 +152,23 @@ const ChatInterface = () => {
             </div>
           )}
 
-          {isCustomer ? (
-            <div 
-              onClick={() => handleSelectChat(user.uid)}
-              className="p-1.5 flex items-center gap-3 bg-emerald-900/20 hover:bg-emerald-900/30 transition-all rounded-2xl cursor-pointer border border-emerald-800/30 shadow-inner"
-            >
-               <div className="relative">
-                 <div className="w-9 h-9 bg-emerald-700 rounded-lg flex items-center justify-center text-white font-black shadow-lg">F</div>
-                 <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black ${adminsOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-gray-500'}`} />
-               </div>
-               <div>
-                 <p className="font-bold text-sm text-white">Farm Support</p>
-                 <p className="text-[10px] text-emerald-500/70 font-bold uppercase">{adminsOnline ? 'Online' : 'Offline'}</p>
-               </div>
+          {!isAdmin ? (
+            <div onClick={() => handleSelectChat(user.uid)} className="p-1.5 flex items-center gap-3 bg-emerald-900/20 hover:bg-emerald-900/30 transition-all rounded-2xl cursor-pointer border border-emerald-800/30 shadow-inner">
+                <div className="relative">
+                  <div className="w-9 h-9 bg-emerald-700 rounded-lg flex items-center justify-center text-white font-black shadow-lg">F</div>
+                  <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black ${adminsOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-gray-500'}`} />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-white">Farm Support</p>
+                  <p className="text-[10px] text-emerald-500/70 font-bold uppercase">{adminsOnline ? 'Online' : 'Offline'}</p>
+                </div>
             </div>
           ) : (
             chats.map((chat) => (
-              <div 
-                key={chat.id} 
-                onClick={() => handleSelectChat(chat.id)} 
-                className={`p-4 mb-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center ${activeChatId === chat.id ? 'bg-emerald-600/20 border border-emerald-500/30' : 'hover:bg-emerald-900/10 border border-transparent'}`}
-              >
+              <div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`p-4 mb-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center ${activeChatId === chat.id ? 'bg-emerald-600/20 border border-emerald-500/30' : 'hover:bg-emerald-900/10 border border-transparent'}`}>
                 <div className="flex items-center gap-3 truncate">
                   <div className="w-10 h-10 bg-emerald-800/50 rounded-xl flex items-center justify-center text-emerald-300 font-black uppercase text-sm">
-                    {chat.userName?.[0] || chat.userEmail?.[0]}
+                    {chat.userName?.[0] || chat.userEmail?.[0] || "?"}
                   </div>
                   <div className="truncate">
                     <p className="font-bold text-xs text-white truncate">{chat.userName || chat.userEmail}</p>
@@ -208,27 +203,12 @@ const ChatInterface = () => {
             </div>
           ) : (
             messages.map((msg, i) => {
-              const isMe = msg.senderId === user.uid;
-              const alignRight = isAdmin ? msg.isAdmin : isMe;
-
+              const alignRight = isAdmin ? msg.isAdmin : msg.senderId === user.uid;
               return (
                 <div key={i} className={`flex flex-col ${alignRight ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl text-sm font-medium leading-relaxed ${alignRight ? 'bg-emerald-600 text-white rounded-tr-none shadow-xl shadow-emerald-900/20' : 'bg-emerald-900/20 text-emerald-50 border border-emerald-800/30 rounded-tl-none'}`}>
                     {msg.text}
                   </div>
-                  
-                  {isAdmin && msg.isAdmin && (
-                    <span className="text-[8px] font-black mt-1.5 text-emerald-500/60 uppercase tracking-tighter">
-                      {isMe ? "You" : `Admin: ${msg.senderEmail}`}
-                    </span>
-                  )}
-                  
-                  {isCustomer && msg.isAdmin && (
-                    <span className="text-[8px] font-black mt-1.5 text-emerald-400 uppercase tracking-tighter">Farm Admin</span>
-                  )}
-                  {isCustomer && isMe && (
-                    <span className="text-[8px] font-black mt-1.5 text-emerald-500/60 uppercase tracking-tighter">You</span>
-                  )}
                 </div>
               );
             })
@@ -238,38 +218,17 @@ const ChatInterface = () => {
 
         {/* Message Input */}
         <form onSubmit={sendMessage} className="p-4 bg-black/40 border-t border-emerald-900/20 flex items-center gap-3 backdrop-blur-xl">
-          <input 
-            type="text" required
-            disabled={isAdmin && !activeChatId}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder={isAdmin && !activeChatId ? "Select a user to reply..." : "Write a message..."}
-            className="flex-1 bg-emerald-950/30 p-3.5 rounded-xl outline-none border border-emerald-900/40 text-emerald-50 text-sm focus:border-emerald-500 transition-all placeholder:text-emerald-900/50"
-          />
-          <button 
-            type="submit" 
-            disabled={isAdmin && !activeChatId}
-            className="p-3.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20 active:scale-90 disabled:opacity-20"
-          >
+          <input type="text" required disabled={isAdmin && !activeChatId} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder={isAdmin && !activeChatId ? "Select a user to reply..." : "Write a message..."} className="flex-1 bg-emerald-950/30 p-3.5 rounded-xl outline-none border border-emerald-900/40 text-emerald-50 text-sm focus:border-emerald-500 transition-all placeholder:text-emerald-900/50" />
+          <button type="submit" disabled={isAdmin && !activeChatId} className="p-3.5 bg-emerald-600 text-white rounded-xl active:scale-90 disabled:opacity-20 shadow-lg shadow-emerald-900/20">
             <PaperAirplaneIcon className="w-5 h-5 -rotate-45" />
           </button>
         </form>
       </div>
-      
+
       <style jsx global>{`
-        .text-glow {
-          text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(16, 185, 129, 0.1);
-          border-radius: 10px;
-        }
+        .text-glow { text-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.1); border-radius: 10px; }
       `}</style>
     </div>
   )
