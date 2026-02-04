@@ -12,7 +12,8 @@ import {
   increment, 
   deleteDoc,
   query,
-  orderBy
+  orderBy,
+  setDoc
 } from 'firebase/firestore'
 import { 
   PlusIcon, 
@@ -39,6 +40,9 @@ import {
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+
+// ✅ IMPORT THE REVENUE STATS COMPONENT
+import RevenueStats from '@/components/RevenueStats' 
 
 export default function MasterBookkeeping() {
   const router = useRouter()
@@ -96,12 +100,9 @@ export default function MasterBookkeeping() {
     }
   };
 
-  // ✅ SIMPLIFIED: Just get category name directly
   const getCategoryName = (fullName: string) => {
     if (!fullName) return "Unknown";
-    // If it's already a clean category (from walk-in), return as is
     if (categories.some(cat => cat.name === fullName)) return fullName;
-    // Otherwise, get the first word before any parentheses
     return fullName.split('(')[0].trim();
   };
 
@@ -116,7 +117,6 @@ export default function MasterBookkeeping() {
     setHistorySearch('');
   }
 
-  // ✅ UPDATED: Find category by name directly
   const activeAnimal = useMemo(() => {
     if (!walkInForm.category) return null;
     const categoryName = getCategoryName(walkInForm.category);
@@ -144,9 +144,18 @@ export default function MasterBookkeeping() {
       for (const o of delivered) {
         await deleteDoc(doc(db, "customersOrders", o.id));
       }
+
+      // ✅ RESET PERMANENT REVENUE IN FIREBASE
+      await updateDoc(doc(db, "salesStats", "totals"), {
+        daily: 0,
+        monthly: 0,
+        yearly: 0,
+        lastUpdate: serverTimestamp()
+      });
+
       setShowClearOverlay(false);
       setCeoPass('');
-      toast.success("History Cleared", { id: tId });
+      toast.success("History & Stats Cleared", { id: tId });
     }
   }
 
@@ -189,29 +198,24 @@ export default function MasterBookkeeping() {
     const categoryQty: Record<string, number> = {};
     let totalQtyToday = 0;
 
-    const totals = orders.reduce((acc, order) => {
-      if (order.status !== 'delivered') return acc;
-      const date = order.createdAt?.toDate();
-      if (!date) return acc;
-      const amount = Number(order.totalAmount) || 0;
-      const qty = Number(order.quantity) || 1;
-      
-      if (date.toDateString() === todayStr) {
-        acc.daily += amount;
-        totalQtyToday += qty;
-        const catName = getCategoryName(order.orderDetails);
-        categoryQty[catName] = (categoryQty[catName] || 0) + qty;
-      }
-      if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) acc.monthly += amount;
-      if (date.getFullYear() === now.getFullYear()) acc.yearly += amount;
-      return acc;
-    }, { daily: 0, monthly: 0, yearly: 0 });
+    orders.forEach(order => {
+        if (order.status !== 'delivered') return;
+        const date = order.createdAt?.toDate();
+        if (!date) return;
+        const qty = Number(order.quantity) || 1;
+        
+        if (date.toDateString() === todayStr) {
+          totalQtyToday += qty;
+          const catName = getCategoryName(order.orderDetails);
+          categoryQty[catName] = (categoryQty[catName] || 0) + qty;
+        }
+    });
 
     const sortedMix = Object.entries(categoryQty)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 20);
 
-    return { ...totals, todayFormatted, monthFormatted, yearFormatted, sortedMix, totalQtyToday };
+    return { todayFormatted, monthFormatted, yearFormatted, sortedMix, totalQtyToday };
   }, [orders]);
 
   const handleCategoryChange = (name: string) => {
@@ -237,28 +241,41 @@ export default function MasterBookkeeping() {
     const tId = toast.loading("Processing...");
     try {
       const categoryName = getCategoryName(walkInForm.category);
+      
+      // 1. Create the Order
       const orderRef = await addDoc(collection(db, "customersOrders"), {
         customerName: walkInForm.name, 
         phone: walkInForm.phone, 
         address: "Walk-in (In-Store)",
-        orderDetails: categoryName, // Store clean category name
+        orderDetails: categoryName,
         quantity: walkInForm.qty, 
         totalAmount: currentTotal,
         status: 'delivered', 
         createdAt: serverTimestamp()
       });
       
-      // ✅ UPDATED: Update stock using category ID
+      // 2. Update Stock
       await updateDoc(doc(db, "livestockCategories", activeAnimal.id), { 
         stockQty: increment(-Number(walkInForm.qty)) 
       });
+
+      // 3. ✅ FIX: Use setDoc instead of updateDoc for the Stats
+      // This ensures if the document is missing, it creates it instead of crashing
+      const statsRef = doc(db, "salesStats", "totals");
+      await setDoc(statsRef, {
+        daily: increment(currentTotal),
+        monthly: increment(currentTotal),
+        yearly: increment(currentTotal),
+        lastUpdate: serverTimestamp()
+      }, { merge: true });
       
       setLastOrderId(orderRef.id);
       setShowConfirmSale(false);
       toast.success("Sold!", { id: tId });
-    } catch (err) { 
-      console.error("Sale error:", err);
-      toast.error("Error processing sale"); 
+    } catch (err: any) { 
+      console.error("Sale error details:", err);
+      // Detailed error toast
+      toast.error(`Sale Failed: ${err.message || "Permission Denied"}`, { id: tId }); 
     }
   }
 
@@ -290,13 +307,11 @@ export default function MasterBookkeeping() {
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-3 md:px-8 font-sans"> 
 
-      {/* Back button */}
       <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-emerald-700 font-bold mb-4 md:mb-2 transition-colors group">
         <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
         <span>Back</span>
       </button> 
 
-      {/* CEO SECURITY OVERLAYS */}
       {showClearOverlay && (
         <div className="fixed inset-0 z-[400] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6">
             <div className="bg-white p-10 rounded-xl max-w-sm w-full text-center shadow-2xl animate-in zoom-in duration-300">
@@ -471,7 +486,6 @@ export default function MasterBookkeeping() {
                 </div>
               </div>
               
-              {/* MOBILE VIEW CARDS */}
               <div className="grid grid-cols-1 divide-y divide-gray-100 md:hidden">
                 {filteredCategories.map((cat) => (
                   <div key={cat.id} className="p-6 flex flex-col gap-4 bg-white">
@@ -500,7 +514,6 @@ export default function MasterBookkeeping() {
                 ))}
               </div>
 
-              {/* DESKTOP TABLE VIEW */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left font-bold text-sm">
                   <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
@@ -545,25 +558,11 @@ export default function MasterBookkeeping() {
               </button>
               {showSales && (
                 <div className="p-6 pt-2 animate-in slide-in-from-top-4 duration-500 border-t border-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 pt-8 text-center">
-                    <div className="bg-emerald-50/50 p-6 rounded-xl border border-emerald-100 text-center">
-                      <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Today Revenue</p>
-                      <p className="text-[8px] font-bold text-emerald-400 mb-3">{salesStats.todayFormatted}</p>
-                      <p className="text-2xl font-black text-emerald-900">₦{salesStats.daily.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 text-center">
-                      <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Items Sold Today</p>
-                      <p className="text-[8px] font-bold text-blue-400 mb-3">{salesStats.totalQtyToday} Total Qty</p>
-                      <p className="text-2xl font-black text-blue-900">₦{salesStats.monthly.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-purple-50/50 p-6 rounded-xl border border-purple-100 text-center">
-                      <p className="text-[10px] font-black text-purple-600 uppercase mb-1">Annual Total</p>
-                      <p className="text-[8px] font-bold text-purple-400 mb-3">{salesStats.yearFormatted}</p>
-                      <p className="text-2xl font-black text-purple-900">₦{salesStats.yearly.toLocaleString()}</p>
-                    </div>
-                  </div>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                  {/* ✅ REPLACE STATIC STATS WITH THE COMPONENT */}
+                  <RevenueStats />
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mt-10">
                     <div className="lg:col-span-2 space-y-6">
                         <div className="flex items-center justify-between"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><PresentationChartBarIcon className="w-4 h-4 text-emerald-600" /> 7-Day Trend</h4><span className="text-[8px] font-black bg-gray-100 px-2 py-1 rounded-full text-gray-500 uppercase">Peak: ₦{graphData.maxVal.toLocaleString()}</span></div>
                         <div className="relative w-full h-48"><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full"><polyline fill="#10b98120" points={`0,100 ${graphData.points} 100,100`} /><polyline fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={graphData.points} /></svg></div>

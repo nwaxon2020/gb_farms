@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { auth, db } from '@/lib/firebaseConfig'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore'
 import { 
   ShoppingBagIcon, 
   UsersIcon, 
@@ -22,31 +22,43 @@ const AdminDashboard = () => {
   const [user, loading] = useAuthState(auth)
   const [isVerified, setIsVerified] = useState(false)
   const [checkingDb, setCheckingDb] = useState(true)
+  const [pendingOrders, setPendingOrders] = useState(0) // ✅ Logic for bubble
   const router = useRouter()
   
   const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID
   const isCEO = user?.uid === CEO_ID
 
- useEffect(() => {
-  const verify = async () => {
-    if (loading) return;
-    if (!user) { router.push('/'); return; }
+  // ✅ Real-time Listener for Pending Orders
+  useEffect(() => {
+    if (!user) return;
 
-    const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID;
-    if (user.uid === CEO_ID) { setIsVerified(true); setCheckingDb(false); return; }
+    // We fetch all orders and filter for 'pending' to ensure real-time sync
+    const unsub = onSnapshot(collection(db, "customersOrders"), (snap) => {
+      const pending = snap.docs.filter(doc => doc.data().status === 'pending');
+      setPendingOrders(pending.length);
+    });
 
-    // Check provider
-    const usedPassword = user.providerData.some(p => p.providerId === 'password');
-    if (!usedPassword) { router.push('/'); return; }
+    return () => unsub();
+  }, [user]);
 
-    // Check DB
-    const q = query(collection(db, "adminStaff"), where("email", "==", user.email?.toLowerCase()));
-    const snap = await getDocs(q);
-    if (!snap.empty) { setIsVerified(true); } else { router.push('/'); }
-    setCheckingDb(false);
-  };
-  verify();
-}, [user, loading]);
+  useEffect(() => {
+    const verify = async () => {
+      if (loading) return;
+      if (!user) { router.push('/'); return; }
+
+      const CEO_ID = process.env.NEXT_PUBLIC_ADMIN_ID;
+      if (user.uid === CEO_ID) { setIsVerified(true); setCheckingDb(false); return; }
+
+      const usedPassword = user.providerData.some(p => p.providerId === 'password');
+      if (!usedPassword) { router.push('/'); return; }
+
+      const q = query(collection(db, "adminStaff"), where("email", "==", user.email?.toLowerCase()));
+      const snap = await getDocs(q);
+      if (!snap.empty) { setIsVerified(true); } else { router.push('/'); }
+      setCheckingDb(false);
+    };
+    verify();
+  }, [user, loading, router]);
 
   if (loading || checkingDb) {
     return (
@@ -91,7 +103,7 @@ const AdminDashboard = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           
-          {/* ✅ 1. Bookkeeping & Inventory Card (Now First) */}
+          {/* Bookkeeping Card */}
           <Link href="/admin/book-keeping" className="group">
             <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-black transition-all duration-300 hover:shadow-2xl hover:shadow-gray-100 h-full flex flex-col items-center text-center relative overflow-hidden">
               <div className="w-24 h-24 bg-gray-100 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
@@ -108,12 +120,26 @@ const AdminDashboard = () => {
             </div>
           </Link>
 
-          {/* Orders Card */}
+          {/* Orders Card with ✅ NOTIFICATION BUBBLE */}
           <Link href="/admin/orders" className="group">
-            <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-emerald-500 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-100 h-full flex flex-col items-center text-center relative overflow-hidden">
-              <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-                <ShoppingBagIcon className="w-8 h-8 md:w-12 md:h-12 text-emerald-600" />
+            <div className="bg-white p-4 md:p-8 rounded-xl md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-emerald-500 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-100 h-full flex flex-col items-center text-center relative overflow-visible">
+              
+              <div className="relative mb-6">
+                <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+                  <ShoppingBagIcon className="w-8 h-8 md:w-12 md:h-12 text-emerald-600" />
+                </div>
+                
+                {/* ✅ THE RED BUBBLE */}
+                {pendingOrders > 0 && (
+                  <div className="absolute -top-2 -right-2 z-50 flex h-8 w-8 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex items-center justify-center rounded-full h-8 w-8 bg-red-600 text-[11px] font-black text-white shadow-lg border-2 border-white">
+                      {pendingOrders}
+                    </span>
+                  </div>
+                )}
               </div>
+
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Manage Orders</h2>
               <p className="text-gray-500 text-xs md:text-sm leading-relaxed mb-4 md:mb-8">
                 Monitor incoming livestock requests, update fulfillment status, and track customer deliveries.

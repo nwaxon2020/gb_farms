@@ -136,12 +136,12 @@ const ChatInterface = () => {
     <div className="flex h-[600px] md:h-[500px] bg-gray-950 rounded-3xl shadow-2xl border border-emerald-900/30 overflow-hidden relative font-sans">
       
       {/* Sidebar */}
-      <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-emerald-900/20 bg-black/40 flex-col`}>
-        <div className="p-5 bg-emerald-950/50 border-b border-emerald-900/20 flex items-center justify-between">
-          <span className="font-black text-[10px] text-emerald-500 uppercase tracking-widest">
+      <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-emerald-800/60 bg-black/40 flex-col`}>
+        <div className="p-5 bg-emerald-800/50 border-b border-emerald-500/20 flex items-center justify-between">
+          <span className="font-black text-[10px] text-emerald-400 uppercase tracking-widest">
             {isAdmin ? "User Conversations" : "Support Dashboard"}
           </span>
-          <ChatBubbleLeftRightIcon className="w-5 h-5 text-emerald-500/50" />
+          <ChatBubbleLeftRightIcon className="w-5 h-5 text-emerald-400" />
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
@@ -153,9 +153,9 @@ const ChatInterface = () => {
           )}
 
           {!isAdmin ? (
-            <div onClick={() => handleSelectChat(user.uid)} className="p-1.5 flex items-center gap-3 bg-emerald-900/20 hover:bg-emerald-900/30 transition-all rounded-2xl cursor-pointer border border-emerald-800/30 shadow-inner">
+            <div onClick={() => handleSelectChat(user.uid)} className="p-1.5 flex items-center gap-3 bg-emerald-900/20 hover:bg-emerald-900/30 transition-all rounded-2xl cursor-pointer border border-emerald-800 shadow-inner">
                 <div className="relative">
-                  <div className="w-9 h-9 bg-emerald-700 rounded-lg flex items-center justify-center text-white font-black shadow-lg">F</div>
+                  <div className="w-9 h-9 bg-emerald-400 rounded-lg flex items-center justify-center text-white font-black shadow-lg">F</div>
                   <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black ${adminsOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-gray-500'}`} />
                 </div>
                 <div>
@@ -184,7 +184,7 @@ const ChatInterface = () => {
 
       {/* Main Chat Area */}
       <div className={`${!isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-gradient-to-b from-gray-950 to-black relative`}>
-        <div className="p-4 md:p-5 bg-emerald-950/30 border-b border-emerald-900/20 flex items-center gap-3 backdrop-blur-md">
+        <div className="p-4 md:p-5 bg-emerald-800/30 border-b border-emerald-800/60 flex items-center gap-3 backdrop-blur-md">
           <button onClick={() => setIsMobileChatOpen(false)} className="md:hidden p-2 -ml-2 text-emerald-500"><ChevronLeftIcon className="w-6 h-6" /></button>
           <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
           <h3 className="font-bold text-sm text-white truncate">
@@ -206,12 +206,12 @@ const ChatInterface = () => {
               const alignRight = isAdmin ? msg.isAdmin : msg.senderId === user.uid;
               return (
                 <div key={i} className={`flex flex-col ${alignRight ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl text-sm font-medium leading-relaxed ${alignRight ? 'bg-emerald-600 text-white rounded-tr-none shadow-xl shadow-emerald-900/20' : 'bg-emerald-900/20 text-emerald-50 border border-emerald-800/30 rounded-tl-none'}`}>
+                  <div className={`max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl text-sm font-medium leading-relaxed ${alignRight ? 'bg-emerald-700 text-white rounded-tr-none shadow-xl shadow-emerald-900/20' : 'bg-emerald-900/20 text-emerald-50 border border-emerald-700 rounded-tl-none'}`}>
                     {msg.text}
                   </div>
                   {/* Internal Admin Label */}
                   {isAdmin && msg.isAdmin && (
-                    <span className="text-[9px] font-bold text-emerald-500/50 mt-1 uppercase tracking-tighter mr-1">
+                    <span className="text-[9px] font-bold text-emerald-300 mt-1 uppercase tracking-tighter mr-1">
                       {msg.senderId === user.uid ? 'You' : msg.senderEmail}
                     </span>
                   )}
@@ -223,8 +223,8 @@ const ChatInterface = () => {
         </div>
 
         {/* Message Input */}
-        <form onSubmit={sendMessage} className="p-4 bg-black/40 border-t border-emerald-900/20 flex items-center gap-3 backdrop-blur-xl">
-          <input type="text" required disabled={isAdmin && !activeChatId} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder={isAdmin && !activeChatId ? "Select a user to reply..." : "Write a message..."} className="flex-1 bg-emerald-950/30 p-3.5 rounded-xl outline-none border border-emerald-900/40 text-emerald-50 text-sm focus:border-emerald-500 transition-all placeholder:text-emerald-900/50" />
+        <form onSubmit={sendMessage} className="p-4 bg-black/40 border-t border-emerald-700/60 flex items-center gap-3 backdrop-blur-xl">
+          <input type="text" required disabled={isAdmin && !activeChatId} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder={isAdmin && !activeChatId ? "Select a user to reply..." : "Write a message..."} className="flex-1 bg-emerald-950/30 p-3.5 rounded-xl outline-none border border-emerald-600 text-emerald-50 text-sm focus:border-emerald-500 transition-all placeholder:text-emerald-900/50" />
           <button type="submit" disabled={isAdmin && !activeChatId} className="p-3.5 bg-emerald-600 text-white rounded-xl active:scale-90 disabled:opacity-20 shadow-lg shadow-emerald-900/20">
             <PaperAirplaneIcon className="w-5 h-5 -rotate-45" />
           </button>

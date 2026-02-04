@@ -1,6 +1,7 @@
 import Hero from '../components/home/Hero'
 import Livestock from '../components/home/Livestock'
 import Contact from '../components/home/Contact'
+import CustomerReviews from '@/components/home/CustomersReview'
 
 export default function HomePageUi() {
   return (
@@ -10,6 +11,7 @@ export default function HomePageUi() {
         <Livestock />
         <Contact />
       </div>
+      <div className='max-h-[40rem] overflow-y-auto'><CustomerReviews/></div>
     </div>
   )
 }

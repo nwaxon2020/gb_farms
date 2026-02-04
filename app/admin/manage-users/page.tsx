@@ -8,7 +8,6 @@ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { collection, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy, getDoc, setDoc, where } from 'firebase/firestore'
 import { UserPlusIcon, TrashIcon, ArrowLeftIcon, ShieldCheckIcon, PhoneIcon, AtSymbolIcon, PencilIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
-import { FaFacebookF, FaInstagram, FaTiktok } from 'react-icons/fa'
 import toast from 'react-hot-toast'
 
 const ManageStaff = () => {

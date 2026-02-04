@@ -12,7 +12,7 @@ import {
   doc, 
   deleteDoc, 
   getDocs, 
-  where, 
+  setDoc, // ✅ Added setDoc for safer updates
   increment, 
   serverTimestamp
 } from 'firebase/firestore'
@@ -37,18 +37,48 @@ const AdminOrders = () => {
   const router = useRouter()
 
   useEffect(() => {
-    const q = query(collection(db, "customersOrders"), orderBy("createdAt", "desc"))
+    const q = query(collection(db, "customersOrders"), orderBy("createdAt", "desc"));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
-    })
-    return () => unsubscribe()
-  }, [])
+      // ✅ We cast the map result to any[] so TypeScript allows the .status check below
+      const allOrders = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      })) as any[];
+
+      const sortedOrders = [...allOrders].sort((a, b) => {
+        // Now 'status' is recognized
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (a.status !== 'pending' && b.status === 'pending') return 1;
+        return 0; 
+      });
+
+      setOrders(sortedOrders);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // ✅ UPDATED: Safer Logic to update stats (works for Online Orders)
+  const recordPermanentRevenue = async (amount: number) => {
+    try {
+      const statsRef = doc(db, "salesStats", "totals");
+      // Using setDoc with merge: true ensures it never "hangs" if the doc is missing
+      await setDoc(statsRef, {
+        daily: increment(amount),
+        monthly: increment(amount),
+        yearly: increment(amount),
+        lastUpdate: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Stats Update Error:", err);
+    }
+  };
 
   const sendWhatsAppNotification = async (order: any) => {
     try {
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       
-      // ✅ Use actual line breaks in the template string
       const messageText = `*ORDER DELIVERED*
 
 Hello ${order.customerName},
@@ -66,9 +96,10 @@ ${order.address}
 *Receipt:*
 ${receiptUrl}
 
+*NOTE:* Receipt link is valid for 48hrs. If not found contact our Support via our website.
+
 _Thank you!_`;
           
-      // ✅ PROPERLY ENCODE THE ENTIRE MESSAGE
       const encodedMessage = encodeURIComponent(messageText);
       
       let cleanNumber = order.phone.replace(/\D/g, ''); 
@@ -76,23 +107,15 @@ _Thank you!_`;
       else if (cleanNumber.length === 10) cleanNumber = '234' + cleanNumber;
 
       const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
-      
-      console.log("📱 Testing WhatsApp URL:", whatsappUrl);
-      
       window.open(whatsappUrl, '_blank');
       
     } catch (error) {
       console.error("WhatsApp Error:", error);
-      
-      // Fallback: Show receipt link
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       toast(
         <div className="p-4">
           <p className="font-bold mb-2">Receipt Link</p>
-          <p className="text-sm mb-2">Copy this link to send to customer:</p>
-          <code className="bg-gray-100 p-2 rounded text-xs block break-all">
-            {receiptUrl}
-          </code>
+          <code className="bg-gray-100 p-2 rounded text-xs block break-all">{receiptUrl}</code>
           <button 
             onClick={() => {
               navigator.clipboard.writeText(receiptUrl);
@@ -111,7 +134,6 @@ _Thank you!_`;
   const updateStatus = async (order: any) => {
     const tId = toast.loading("Finalizing sale and updating inventory...")
     try {
-      // ✅ USE THE STORED CATEGORY FIELD (already cleaned from PlaceOrderModal)
       const categoryName = order.category || '';
       
       if (!categoryName) {
@@ -126,45 +148,34 @@ _Thank you!_`;
         updatedAt: serverTimestamp()
       })
 
-      // 2. ✅ DEDUCT STOCK from livestockCategories using the stored category
+      // 2. DEDUCT STOCK
       const inventoryRef = collection(db, "livestockCategories");
       const inventorySnap = await getDocs(inventoryRef);
-      
       let foundCategory = false;
       
       for (const categoryDoc of inventorySnap.docs) {
-        const categoryData = categoryDoc.data();
-        const dbCategoryName = categoryData.name || '';
-        
-        // Case-insensitive comparison using the stored category field
-        if (dbCategoryName.toLowerCase() === categoryName.toLowerCase()) {
+        if (categoryDoc.data().name.toLowerCase() === categoryName.toLowerCase()) {
           foundCategory = true;
-          
-          // Deduct stock
           await updateDoc(doc(db, "livestockCategories", categoryDoc.id), {
             stockQty: increment(-Number(order.quantity || 1)),
             updatedAt: serverTimestamp()
           });
-          
-          console.log(`✅ Stock deducted for ${categoryName}: -${order.quantity}`);
-          break; // Found the category, no need to continue
+          break;
         }
       }
+
+      // ✅ 3. RECORD PERMANENT REVENUE (This is what updates your stats cards)
+      await recordPermanentRevenue(Number(order.totalAmount) || 0);
 
       if (foundCategory) {
         toast.success("Stock deducted & Sale recorded!", { id: tId });
       } else {
-        // Log warning but still complete the order
-        console.warn(`⚠️ Category "${categoryName}" not found in inventory`);
-        toast.success("Order delivered, but category not found in inventory.", { id: tId });
+        toast.success("Order delivered and revenue recorded!", { id: tId });
       }
 
-      // 3. Notify Customer
-      setTimeout(() => {
-        sendWhatsAppNotification(order);
-      }, 1000); // Small delay to ensure order is updated
+      // 4. Notify Customer
+      setTimeout(() => { sendWhatsAppNotification(order); }, 1000);
 
-      // Close confirmation modal
       setShowConfirmDelivery(false);
       setSelectedOrder(null);
 
@@ -206,7 +217,6 @@ _Thank you!_`;
   return (
     <div className="min-h-screen bg-gray-50 pt-28 pb-12 px-4 md:px-8">
       
-      {/* ✅ CONFIRMATION OVERLAY */}
       {showConfirmDelivery && selectedOrder && (
         <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 animate-in zoom-in duration-300">
@@ -253,7 +263,7 @@ _Thank you!_`;
                   <div>
                     <p className="text-xs font-black text-amber-700 uppercase tracking-widest">Important Notice</p>
                     <p className="text-[11px] text-amber-600 mt-1 font-medium">
-                      {"This action will: 1) Mark order as delivered 2) Deduct stock from inventory 3) Send WhatsApp notification to customer"}
+                      {"This action will: 1) Mark order as delivered 2) Deduct stock from inventory 3) Update permanent revenue 4) Notify customer"}
                     </p>
                   </div>
                 </div>
@@ -282,7 +292,6 @@ _Thank you!_`;
       )}
 
       <div className="max-w-6xl mx-auto">
-        
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4">
             <button 
@@ -314,15 +323,10 @@ _Thank you!_`;
               const unitCost = total > 0 ? total / qty : 0;
               const orderDate = order.createdAt?.toDate 
                 ? order.createdAt.toDate().toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
                   }) 
                 : '---';
               
-              // ✅ Use the stored category field (already cleaned)
               const displayCategory = order.category || '';
 
               return (
@@ -354,11 +358,7 @@ _Thank you!_`;
                     {order.status === 'delivered' && (
                       <div className="mb-4 p-2 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-2">
                         <LinkIcon className="w-3 h-3 text-blue-500" />
-                        <a 
-                          href={`${window.location.origin}/receipt/${order.id}`} 
-                          target="_blank" 
-                          className="text-[9px] text-blue-600 font-black uppercase tracking-tight hover:underline"
-                        >
+                        <a href={`${window.location.origin}/receipt/${order.id}`} target="_blank" className="text-[9px] text-blue-600 font-black uppercase tracking-tight hover:underline">
                           View Receipt
                         </a>
                       </div>
@@ -369,9 +369,7 @@ _Thank you!_`;
                         <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
                           <BanknotesIcon className="w-3 h-3" /> Unit Cost
                         </p>
-                        <p className="text-sm font-black text-emerald-900">
-                          ₦{unitCost > 0 ? unitCost.toLocaleString() : '---'}
-                        </p>
+                        <p className="text-sm font-black text-emerald-900">₦{unitCost > 0 ? unitCost.toLocaleString() : '---'}</p>
                       </div>
                       <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
                         <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
@@ -384,9 +382,7 @@ _Thank you!_`;
                     <div className="col-span-2 bg-emerald-900 p-3 rounded-lg border border-emerald-950 shadow-lg shadow-emerald-100">
                       <div className="flex justify-between items-center">
                         <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total Bill</p>
-                        <p className="text-lg font-black text-white">
-                          ₦{total > 0 ? total.toLocaleString() : 'No Amount Set'}
-                        </p>
+                        <p className="text-lg font-black text-white">₦{total > 0 ? total.toLocaleString() : 'No Amount Set'}</p>
                       </div>
                     </div>
 
@@ -409,17 +405,11 @@ _Thank you!_`;
 
                   <div className="mt-6 flex gap-2">
                     {order.status !== 'delivered' && (
-                      <button 
-                        onClick={() => handleMarkDeliveryClick(order)}
-                        className="flex-1 bg-green-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-green-700 shadow-lg shadow-green-100 transition-all active:scale-95"
-                      >
+                      <button onClick={() => handleMarkDeliveryClick(order)} className="flex-1 bg-green-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-green-700 shadow-lg shadow-green-100 transition-all active:scale-95">
                         <CheckCircleIcon className="w-5 h-5" /> Mark Delivered
                       </button>
                     )}
-                    <button 
-                      onClick={() => deleteOrder(order.id)}
-                      className="p-3.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-gray-100 hover:border-red-200"
-                    >
+                    <button onClick={() => deleteOrder(order.id)} className="p-3.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-gray-100 hover:border-red-200">
                       <TrashIcon className="w-5 h-5" />
                     </button>
                   </div>
