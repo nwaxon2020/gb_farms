@@ -12,7 +12,7 @@ const LoadingScreen = () => {
         
         {/* Center Logo/Initial */}
         <div className="absolute flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-green-700 shadow-lg">
-          <span className="text-sm font-bold text-white">F</span>
+          <img src="/site_logo.png" alt="site logo" />
         </div>
       </div>
       
