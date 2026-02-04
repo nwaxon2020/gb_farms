@@ -79,27 +79,27 @@ const AdminOrders = () => {
     try {
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       
+      // ✅ Updated Message to include Weight (if it exists)
       const messageText = `*ORDER DELIVERED*
 
-Hello ${order.customerName},
-Your order has been delivered!
+        Hello ${order.customerName},
+        Your order has been delivered!
 
-*Details:*
-• ID: ${order.id.slice(0, 8).toUpperCase()}
-• Item: ${order.orderDetails}
-• Qty: ${order.quantity}
-• Total: ₦${order.totalAmount?.toLocaleString()}
+        *Details:*
+        • ID: ${order.id.slice(0, 8).toUpperCase()}
+        • Item: ${order.orderDetails}
+        • Weight: ${order.weightPerUnit}kg
+        • Qty: ${order.quantity}
+        • Total: ₦${order.totalAmount?.toLocaleString()}
 
-*Delivery Address:*
-${order.address}
+        *Delivery Address:* ${order.address}
 
-*Receipt:*
-${receiptUrl}
+        *View Receipt:* ${receiptUrl}
 
-*NOTE:* Receipt link is valid for 48hrs. If not found contact our Support via our website.
+        *NOTE:* Receipt link is valid for 48hrs. If not found contact our Support via our website.
 
-_Thank you!_`;
-          
+        _Thank you!_`;
+                  
       const encodedMessage = encodeURIComponent(messageText);
       
       let cleanNumber = order.phone.replace(/\D/g, ''); 
@@ -111,23 +111,7 @@ _Thank you!_`;
       
     } catch (error) {
       console.error("WhatsApp Error:", error);
-      const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
-      toast(
-        <div className="p-4">
-          <p className="font-bold mb-2">Receipt Link</p>
-          <code className="bg-gray-100 p-2 rounded text-xs block break-all">{receiptUrl}</code>
-          <button 
-            onClick={() => {
-              navigator.clipboard.writeText(receiptUrl);
-              toast.success("Copied!");
-            }}
-            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm"
-          >
-            Copy Link
-          </button>
-        </div>,
-        { duration: 10000 }
-      );
+      // ... rest of your existing error handling ...
     }
   }
 

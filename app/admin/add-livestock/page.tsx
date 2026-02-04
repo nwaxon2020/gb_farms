@@ -75,7 +75,6 @@ export default function AdminLivestock() {
     } catch (err) { toast.error("Upload failed"); setStatus(false); return null; }
   }
 
-  // ✅ NEW: Helper function to check if category already exists (case-insensitive)
   const categoryExists = (categoryName: string): boolean => {
     if (!categoryName) return false;
     const formattedCategory = formatName(categoryName);
@@ -93,11 +92,8 @@ export default function AdminLivestock() {
       let finalCategory = form.category;
       let categoryId = '';
 
-      // Handle new category creation
       if (form.category === 'other' && newCategoryName) {
         const formattedNewCat = formatName(newCategoryName);
-        
-        // ✅ UPDATED: Check if category exists (case-insensitive)
         const existingCat = categories.find(c => 
           c.name.toLowerCase() === formattedNewCat.toLowerCase()
         );
@@ -106,7 +102,6 @@ export default function AdminLivestock() {
           categoryId = existingCat.id;
           finalCategory = existingCat.name;
         } else {
-          // ✅ ADDED: Double-check with database to ensure no duplicates
           const categoriesSnap = await getDocs(collection(db, "livestockCategories"));
           const allCategories = categoriesSnap.docs.map(doc => ({ 
             id: doc.id, 
@@ -123,12 +118,11 @@ export default function AdminLivestock() {
             return;
           }
           
-          // Create new category
           const newCatRef = await addDoc(collection(db, "livestockCategories"), {
             name: formattedNewCat,
             unitPrice: Number(form.price),
             stockQty: 0, 
-            animalIds: [], // Initialize empty array for animal IDs
+            animalIds: [], 
             createdAt: serverTimestamp()
           });
           categoryId = newCatRef.id;
@@ -136,7 +130,6 @@ export default function AdminLivestock() {
           toast.success(`New category "${formattedNewCat}" created!`);
         }
       } else if (form.category) {
-        // Find existing category (case-insensitive search)
         const existingCat = categories.find(c => 
           c.name.toLowerCase() === form.category.toLowerCase()
         );
@@ -144,7 +137,6 @@ export default function AdminLivestock() {
           categoryId = existingCat.id;
           finalCategory = existingCat.name;
         } else {
-          // This shouldn't happen normally, but just in case
           toast.error(`Category "${form.category}" not found!`);
           setLoading(false);
           return;
@@ -153,8 +145,8 @@ export default function AdminLivestock() {
 
       const data = { 
         breed: form.breed,
-        category: finalCategory, // Store category name
-        categoryId: categoryId, // Store category reference ID
+        category: finalCategory, 
+        categoryId: categoryId, 
         price: Number(form.price),
         desc: form.desc,
         specs: form.specs,
@@ -166,12 +158,10 @@ export default function AdminLivestock() {
 
       let animalId: string;
       if (editId) {
-        // Update existing animal
         await updateDoc(doc(db, "livestock", editId), data);
         animalId = editId;
         toast.success("Updated successfully");
       } else {
-        // Add new animal
         const newAnimalRef = await addDoc(collection(db, "livestock"), { 
           ...data, 
           createdAt: serverTimestamp() 
@@ -180,7 +170,6 @@ export default function AdminLivestock() {
         toast.success("Added to catalog");
       }
 
-      // Add animal ID to category's animalIds array if category exists
       if (categoryId) {
         const categoryRef = doc(db, "livestockCategories", categoryId);
         const categoryDoc = await getDoc(categoryRef);
@@ -195,7 +184,6 @@ export default function AdminLivestock() {
         }
       }
 
-      // Reset form
       setForm({ breed: '', category: '', price: '', desc: '', specs: '', image: '', color: 'bg-emerald-900'})
       setNewCategoryName('')
       setEditId(null)
@@ -214,14 +202,10 @@ export default function AdminLivestock() {
           <button onClick={async () => {
               toast.dismiss(t.id); const tId = toast.loading("Removing...");
               try {
-                // Remove from livestock collection
                 await deleteDoc(doc(db, "livestock", item.id));
-                
-                // Remove from category's animalIds array if exists
                 if (item.categoryId) {
                   const categoryRef = doc(db, "livestockCategories", item.categoryId);
                   const categoryDoc = await getDoc(categoryRef);
-                  
                   if (categoryDoc.exists()) {
                     const currentAnimalIds = categoryDoc.data().animalIds || [];
                     const updatedAnimalIds = currentAnimalIds.filter((id: string) => id !== item.id);
@@ -230,12 +214,9 @@ export default function AdminLivestock() {
                     });
                   }
                 }
-                
-                // Delete image from storage
                 if (item.image?.includes("firebasestorage")) {
                   await deleteObject(ref(storage, item.image));
                 }
-                
                 toast.success("Removed", { id: tId });
               } catch (err) { toast.error("Failed"); }
             }} className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Confirm</button>
@@ -289,7 +270,6 @@ export default function AdminLivestock() {
                         value={newCategoryName} 
                         onChange={e => setNewCategoryName(e.target.value)} 
                       />
-                      {/* ✅ ADDED: Show warning if category already exists */}
                       {newCategoryName && categoryExists(newCategoryName) && (
                         <div className="text-red-600 text-xs font-bold animate-in slide-in-from-top duration-300 flex items-center gap-1">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -301,7 +281,8 @@ export default function AdminLivestock() {
                     </>
                   )}
 
-                  <input required type="number" placeholder="Price ₦" className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
+                  {/* ✅ UPDATED PLACEHOLDER */}
+                  <input required type="number" placeholder="Price per KG ₦" className="p-3 bg-gray-50 rounded-lg ring-1 ring-gray-200" 
                     value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
                 </div>
 
@@ -349,7 +330,6 @@ export default function AdminLivestock() {
               </form>
             </div>
 
-            {/* Hero Settings (No changes needed here) */}
             <div className="bg-white rounded-lg shadow-sm border border-emerald-100 overflow-hidden">
               <button onClick={() => setIsHeroOpen(!isHeroOpen)} className="w-full p-4 md:px-8 flex items-center justify-between bg-white hover:bg-gray-50">
                 <div className="flex items-center gap-2">
@@ -406,7 +386,8 @@ export default function AdminLivestock() {
                               <div className="flex flex-col">
                                   <span className={`w-fit text-[9px] font-black uppercase px-2 py-0.5 rounded-full text-white ${s.color}`}>{s.category}</span>
                                   <h4 className="font-black text-emerald-900 md:text-lg leading-tight mt-1">{s.breed}</h4>
-                                  <p className="text-xs text-emerald-600 font-bold">₦{s.price?.toLocaleString()}</p>
+                                  {/* ✅ UPDATED PRICE LABEL */}
+                                  <p className="text-xs text-emerald-600 font-bold">₦{s.price?.toLocaleString()} / KG</p>
                                   <p className="text-[8px] md:text-[10px] text-gray-400 font-bold mt-1 uppercase italic tracking-tighter">Specs: {s.specs || 'N/A'}</p>
                               </div>
                           </div>
