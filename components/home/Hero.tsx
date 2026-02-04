@@ -50,7 +50,7 @@ export default function Hero() {
   }, [rotatingTexts.length])
 
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden pt-10 md:pt-20 md:pb-8">
+    <section className="relative min-h-screen flex items-center overflow-hidden pt-16 md:pt-20 md:pb-8">
       <VideoBackground />
       <div className="absolute top-0 right-0 w-64 h-64 md:w-96 md:h-96 bg-emerald-300/10 rounded-full blur-3xl animate-pulse"></div>
       
@@ -66,9 +66,9 @@ export default function Hero() {
             </div>
             
             <div className="space-y-2">
-              <h1 className="text-4xl md:text-7xl lg:text-8xl font-black leading-tight text-white">
+              <h1 className="text-4xl md:text-5xl font-black leading-tight text-white">
                 {mainTitle}
-                <div className="text-2xl md:text-5xl h-[1.2em] md:h-[1.3em] overflow-hidden relative">
+                <div className="text-2xl md:text-4xl h-[1.2em] md:h-[1.3em] overflow-hidden relative">
                   <div className="transition-all duration-700 ease-in-out" style={{ transform: `translateY(-${textIndex * 25}%)` }}>
                     {rotatingTexts.map((text: string, index: number) => (
                       <div key={index} className="h-[1.2em] flex items-center bg-gradient-to-r from-emerald-300 to-green-300 bg-clip-text text-yellow-500 pb-2">

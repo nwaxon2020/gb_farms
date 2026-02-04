@@ -7,7 +7,7 @@ export default function HomePageUi() {
   return (
     <div>
       <Hero />
-      <div className='p-3'>
+      <div>
         <Livestock />
         <Contact />
       </div>
