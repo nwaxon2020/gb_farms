@@ -100,7 +100,7 @@ export default function AboutPageUi() {
                 {/* ✅ CEO IMAGE FROM DATABASE */}
                 <img src={about.ceoImage} className="h-64 w-full object-cover rounded-3xl shadow-xl" alt="CEO" />
                 <div className="space-y-4">
-                  <img src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80" className="h-30 w-full object-cover rounded-3xl shadow-xl" alt="Farm" />
+                  <img src="https://afrimash.com/wp-content/uploads/2021/03/a09e4b7e-27e4-4fe5-b48c-26d75f69a697.jpg" className="h-30 w-full object-cover rounded-3xl shadow-xl" alt="Pigs image" />
                   <img src="https://images.unsplash.com/photo-1500595046743-cd271d694d30?auto=format&fit=crop&w=400&q=80" className="h-30 w-full object-cover rounded-3xl shadow-xl" alt="Livestock" />
                 </div>
               </div>
@@ -236,7 +236,7 @@ export default function AboutPageUi() {
               {/* ✅ TEAM IMAGE FROM DATABASE */}
               <img 
                 src={about.teamImage} 
-                className="w-full h-[450px] md:h-[500px] object-cover rounded-3xl shadow-xl"
+                className="w-full h-[450px] md:h-[550px] object-cover rounded-3xl shadow-xl"
                 alt="Our Team"
               />
               <div className="absolute -bottom-6 right-0 md:-right-6 bg-white p-4 rounded-lg md:rounded-3xl shadow-2xl border border-emerald-100 max-w-xs">
