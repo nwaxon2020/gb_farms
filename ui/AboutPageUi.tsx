@@ -108,7 +108,7 @@ export default function AboutPageUi() {
                 <div className="flex items-center gap-3">
                   <TrophyIcon className="w-6 h-6 md:w-8 md:h-8 text-amber-600" />
                   <div>
-                    <p className="text-xl md:text-2xl font-black text-gray-900">25+</p>
+                    <p className="text-xl md:text-2xl font-black text-gray-900">{about.stats[0].value}</p>
                     <p className="text-xs text-gray-500 font-bold uppercase">Years Excellence</p>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export default function AboutPageUi() {
                   <CheckCircleIcon className="w-6 h-6 text-emerald-600" />
                   <div>
                     <p className="text-sm font-black text-gray-900">Trusted Leader</p>
-                    <p className="text-xs text-gray-500">25+ Years Experience</p>
+                    <p className="text-xs text-gray-500">{about.stats[0].value} Years Experience</p>
                   </div>
                 </div>
               </div>
