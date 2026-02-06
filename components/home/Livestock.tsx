@@ -14,7 +14,7 @@ const Livestock = () => {
       name: 'Premium Pigs',
       icon: '🐖',
       description: 'Free-range pigs raised on natural diets without antibiotics or hormones.',
-      image: 'https://images.unsplash.com/photo-1527960471264-932f39eb5846?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
+      image: '/holderImg.webp',
       features: ['Natural Diet', 'Free Range', 'Humane Treatment', 'Regular Vet Care']
     },
     {
@@ -22,7 +22,7 @@ const Livestock = () => {
       name: 'Grass-fed Cows',
       icon: '🐄',
       description: 'Cattle raised on open pastures with access to fresh grass and clean water.',
-      image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=2070&q=80',
+      image: '/holderImg.webp',
       features: ['Grass Fed', 'Pasture Raised', 'No Hormones', 'Sustainable']
     },
     {
@@ -30,7 +30,7 @@ const Livestock = () => {
       name: 'Healthy Goats',
       icon: '🐐',
       description: 'Goats raised in spacious environments with specialized care and nutrition.',
-      image: 'https://images.unsplash.com/photo-1552423314-cf29d1c75b8c?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
+      image: '/holderImg.webp',
       features: ['Organic Feed', 'Veterinary Care', 'Ethical Practices', 'Happy Animals']
     },
   ]
