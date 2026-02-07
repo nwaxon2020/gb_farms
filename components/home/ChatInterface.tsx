@@ -133,7 +133,7 @@ const ChatInterface = () => {
   }
 
   return (
-    <div className="flex h-[600px] md:h-[500px] bg-gray-950 rounded-3xl shadow-2xl border border-emerald-900/30 overflow-hidden relative font-sans">
+    <div className="flex h-[600px] md:h-[500px] bg-gray-950 md:rounded-3xl shadow-2xl border border-emerald-900/30 overflow-hidden relative font-sans">
       
       {/* Sidebar */}
       <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-emerald-800/60 bg-black/40 flex-col`}>

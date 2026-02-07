@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { db, auth } from '@/lib/firebaseConfig'
-import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { signOut, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth'
 import { FaFacebookF, FaInstagram, FaWhatsapp, FaLock, FaTiktok } from 'react-icons/fa'
@@ -16,29 +16,45 @@ const Footer = () => {
   const [adminPassword, setAdminPassword] = useState('')
   const [error, setError] = useState('')
   
+  // ✅ NEW: State for Dynamic Years from Homepage Stats
+  const [dynamicYears, setDynamicYears] = useState('25+')
+
   const [contactData, setContactData] = useState({ 
-    phoneNumber: '', email: 'ceo@farmfresh.com', address: '123 Green Pastures Lane, Countryside',
+    phoneNumber: '', email: 'ceo@obaasconsult.com', address: 'Nigeria',
     boilerMessage: '', facebook: '', instagram: '', twitter: '', youtube: '', tiktok: ''
   })
 
   const currentYear = new Date().getFullYear()
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "contact"), (doc) => {
+    // 1. Fetch Contact Data
+    const unsubContact = onSnapshot(doc(db, "settings", "contact"), (doc) => {
       if (doc.exists()) {
         setContactData(prev => ({ ...prev, ...doc.data() }))
       }
     })
-    return () => unsub()
+
+    // ✅ 2. Fetch Dynamic Experience (Years) from Homepage Settings
+    const unsubHome = onSnapshot(doc(db, "settings", "homepage"), (doc) => {
+      if (doc.exists()) {
+        const stats = doc.data().stats;
+        // Find the stat that looks like "Years" or just take the first one if indexed
+        const yearStat = stats?.find((s: any) => s.label.toLowerCase().includes('year'));
+        if (yearStat) setDynamicYears(yearStat.value);
+      }
+    })
+
+    return () => {
+      unsubContact();
+      unsubHome();
+    }
   }, [])
 
   const handleGoogleAuth = async () => {
     if (user) { await signOut(auth) } 
     else {
       const provider = new GoogleAuthProvider()
-      try { 
-        await signInWithPopup(auth, provider)
-      } 
+      try { await signInWithPopup(auth, provider) } 
       catch (err) { console.error("Sign in error", err) }
     }
   }
@@ -47,23 +63,14 @@ const Footer = () => {
     e.preventDefault();
     setError('');
     const tId = toast.loading("Connecting to Secure Auth...");
-
     try {
-      // Force lowercase to match your adminStaff collection docs
       const cleanEmail = adminEmail.toLowerCase().trim();
-      
       await signInWithEmailAndPassword(auth, cleanEmail, adminPassword);
-      
       setIsAdminModalOpen(false);
       toast.success("Admin Access Granted", { id: tId });
       window.location.reload(); 
     } catch (err: any) {
-      console.error(err.code);
-      if (err.code === 'auth/account-exists-with-different-credential') {
-        setError("Security Conflict: This email is already a Google user. Please use a non-Google email for Admin.");
-      } else {
-        setError("Access Denied: Invalid Credentials.");
-      }
+      setError("Access Denied: Invalid Credentials.");
       toast.error("Login Failed", { id: tId });
     }
   };
@@ -79,15 +86,24 @@ const Footer = () => {
     : '#'
 
   return (
-    <footer className="bg-gradient-to-b from-gray-900 to-gray-950 text-white px-6 md:px-4 pt-16 pb-8 relative">
+    <footer className="bg-gradient-to-b from-gray-900 to-gray-950 text-white px-4 md:px-6 pt-16 pb-8 relative">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
           <div className="lg:col-span-2">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-700 rounded-2xl flex items-center justify-center shadow-lg"><span className="text-white font-bold text-3xl">F</span></div>
-              <div><h2 className="text-3xl font-bold font-serif">FarmFresh</h2><p className="text-green-300 text-sm font-medium">Premium Livestock Since 1995</p></div>
+            {/* ✅ Updated Branding: OBAAS Emmanuel Consult */}
+            <div className="flex items-start space-x-2 md:space-x-3 mb-6">
+              <div className="bg-white p-1 md:p-2 w-10 h-10 md:w-12 md:h-12 rounded-xl overflow-hidden flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <img src="/site_logo.png" alt="site logo" />
+              </div>
+              <div>
+                <h2 className="text-xl md:text-3xl font-bold font-serif leading-tight">OBAAS Emmanuel Consult</h2>
+                {/* ✅ Dynamic Years applied here */}
+                <p className="text-green-300 text-sm font-medium tracking-wide">Expert Consultancy & Quality Service with {dynamicYears} years of Excellence</p>
+              </div>
             </div>
-            <p className="text-gray-400 mb-8 max-w-lg">Ethically-raised livestock and sustainable farming practices.</p>
+            <p className="text-gray-400 mb-8 max-w-lg leading-relaxed">
+              Providing world-class consultancy and agricultural solutions. We are committed to integrity, innovation, and sustainable growth for our clients.
+            </p>
             <div className="flex space-x-4">
               {socialLinks.map((social) => (
                 <a key={social.label} href={social.href} target="_blank" rel="noopener noreferrer" className={`w-10 h-10 bg-gray-800 ${social.color} rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110`}>{social.icon}</a>
@@ -98,7 +114,7 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-bold mb-6 text-green-300">Quick Links</h3>
             <ul className="space-y-3">
-              {[ { name: 'Home', href: '/' }, { name: 'Our Livestock', href: '/livestock' }, { name: 'About Us', href: '/about' }, { name: 'Chat Us', href: '/#chat' } ].map((item) => (
+              {[ { name: 'Home', href: '/' }, { name: 'Our Services', href: '/livestock' }, { name: 'About Us', href: '/about' }, { name: 'Chat Us', href: '/#chat' } ].map((item) => (
                 <li key={item.name}><Link href={item.href} className="text-gray-400 hover:text-green-400 transition-colors flex items-center space-x-2"><span className="text-[10px] opacity-70">▶</span><span>{item.name}</span></Link></li>
               ))}
               <li><button onClick={handleGoogleAuth} className="text-gray-400 hover:text-green-400 transition-colors flex items-center space-x-2"><span className="text-[10px] opacity-70">▶</span><span>{user ? 'Sign Out' : 'Sign In with Google'}</span></button></li>
@@ -112,7 +128,7 @@ const Footer = () => {
             <h3 className="text-lg font-bold mb-6 text-green-300">Contact CEO</h3>
             <ul className="space-y-4 text-gray-400">
               <li className="flex items-start space-x-3"><span className="text-green-500">📍</span><span>{contactData.address}</span></li>
-              <li className="flex items-center space-x-3"><span className="text-green-500">📞</span><a href={`tel:${contactData.phoneNumber}`} className="hover:text-white transition-colors">{contactData.phoneNumber || 'Setting up...'}</a></li>
+              <li className="flex items-center space-x-3"><span className="text-green-500">📞</span><a href={`tel:${contactData.phoneNumber}`} className="hover:text-white transition-colors">{contactData.phoneNumber || 'Connecting...'}</a></li>
               <li className="flex items-center space-x-3"><span className="text-green-500">✉️</span><a href={`mailto:${contactData.email}`} className="hover:text-white transition-colors">{contactData.email}</a></li>
             </ul>
             <div className="mt-8">
@@ -122,7 +138,7 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-gray-800 my-12 pt-8 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm">
-          <p>© {currentYear} FarmFresh Livestock. All rights reserved.</p>
+          <p>© {currentYear} OBAAS Emmanuel Consult. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0"><Link href="/policy" className="hover:text-green-400">Privacy Policy</Link><Link href="/terms" className="hover:text-green-400">Terms of Service</Link></div>
         </div>
       </div>

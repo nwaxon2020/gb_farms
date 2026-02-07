@@ -15,14 +15,15 @@ const Contact = () => {
   })
 
   useEffect(() => {
-    // ✅ Updated to listen for address and publicDisplayPhone
+    // ✅ Logic updated to use the correct fields from HomeDashboard
     const unsub = onSnapshot(doc(db, "settings", "contact"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data()
         setContactInfo({
-          // ✅ Matches the field name used in your HomeDashboard
+          // ✅ Prioritizes the Public Display Phone from your editor
           phone: data.publicDisplayPhone || data.phoneNumber || "", 
-          email: data.email || "sales@farmlivestock.com",
+          // ✅ Prioritizes the Public Display Email from your editor
+          email: data.publicDisplayEmail || data.email || "sales@farmlivestock.com",
           address: data.address || "KM 3 Sagamu / Abeokuta Express Way, Logbara, Ogun State.",
           businessHours: data.businessHours || "Mon-Fri: 8AM - 6PM EST",
           boilerMessage: data.boilerMessage || ""
@@ -68,9 +69,9 @@ const Contact = () => {
   return (
     <section id="contact" className="py-20 bg-white">
       <div className="absolute -mt-32"></div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center space-x-2 bg-amber-100 text-amber-800 px-4 py-2 rounded-full text-sm font-semibold mb-4">
+      <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-0 text-center mb-16">
+          <div className="inline-flex items-center space-x-2 bg-amber-100 text-amber-800 px-8 md:px-4 py-2 rounded-full text-sm font-semibold mb-4">
             <span className="w-2 h-2 bg-amber-600 rounded-full animate-pulse"></span>
             <span>📞 Contact Us</span>
           </div>
@@ -93,7 +94,7 @@ const Contact = () => {
             </div>
           </div>
           
-          <p className="text-gray-600 text-lg max-w-3xl mx-auto">
+          <p className="px-4 sm:px-0 text-gray-600 text-lg max-w-3xl mx-auto">
             Whether you're a restaurant, butcher shop, or individual buyer, we're here to help.
           </p>
 
@@ -102,7 +103,7 @@ const Contact = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
           
-          <div className="space-y-6 md:space-y-8 order-2 lg:order-1">
+          <div className="p-4 sm:px-0 space-y-6 md:space-y-8 order-2 lg:order-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <Link
                 href={whatsappUrl}
@@ -148,8 +149,8 @@ const Contact = () => {
             </div>
           </div>
 
-          <div className="order-1 lg:order-2 lg:sticky lg:top-32">
-             <div className="h-full w-full rounded-3xl overflow-hidden shadow-2xl border border-emerald-100">
+          <div className="py-4 order-1 lg:order-2 lg:sticky lg:top-32">
+             <div className="h-full w-full md:rounded-3xl overflow-hidden shadow-2xl border border-emerald-100">
                 <ChatInterface />
              </div>
           </div>

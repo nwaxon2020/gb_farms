@@ -5,8 +5,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { collection, onSnapshot, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import toast from 'react-hot-toast'
 import { 
-  ArrowLeftIcon, PhotoIcon, PencilIcon, CheckCircleIcon, 
-  PlusIcon, XMarkIcon, SparklesIcon, VideoCameraIcon, ArrowUpTrayIcon, MapPinIcon, PhoneIcon
+  ArrowLeftIcon, PhotoIcon, PencilIcon, EnvelopeIcon, 
+  XMarkIcon, VideoCameraIcon, ArrowUpTrayIcon, MapPinIcon, PhoneIcon
 } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
 
@@ -40,10 +40,11 @@ export default function HomeDashboard() {
     ]
   })
 
-  // ✅ NEW: Specific state for Public Address and Phone
+  // ✅ Updated state to include email
   const [publicContact, setPublicContact] = useState({
     address: '',
-    displayPhone: '' 
+    displayPhone: '',
+    displayEmail: '' 
   })
 
   useEffect(() => {
@@ -60,11 +61,12 @@ export default function HomeDashboard() {
     // Fetch Hero
     getDoc(doc(db, "settings", "homepage")).then(d => d.exists() && setHero(d.data() as any))
     
-    // ✅ NEW: Fetch the Public Contact settings from its own document
+    // ✅ Updated fetch logic
     getDoc(doc(db, "settings", "contact")).then(d => {
       if(d.exists()) setPublicContact({
         address: d.data().address || '',
-        displayPhone: d.data().publicDisplayPhone || '' 
+        displayPhone: d.data().publicDisplayPhone || '',
+        displayEmail: d.data().publicDisplayEmail || '' 
       })
     })
 
@@ -91,10 +93,11 @@ export default function HomeDashboard() {
       // Save Homepage Content
       await setDoc(doc(db, "settings", "homepage"), hero, { merge: true })
       
-      // ✅ Save Public Address & Phone (Safe field name)
+      // ✅ Updated save logic to include Email
       await setDoc(doc(db, "settings", "contact"), {
         address: publicContact.address,
         publicDisplayPhone: publicContact.displayPhone,
+        publicDisplayEmail: publicContact.displayEmail,
         updatedAt: serverTimestamp()
       }, { merge: true })
 
@@ -149,31 +152,6 @@ export default function HomeDashboard() {
         <div className="grid lg:grid-cols-2 gap-6 md:gap-10">
           
           <div className="space-y-6">
-            {/* ✅ NEW: GLOBAL OFFICE CONTACT SECTION */}
-            <div className="bg-white px-3 py-5 sm:p-6 rounded-lg sm:rounded-[2.5rem] border border-emerald-100 shadow-sm">
-              <h2 className="text-lg sm:text-xl font-black text-emerald-900 mb-4 sm:mb-6 flex items-center gap-2"><MapPinIcon className="w-5 h-5" /> Public Office Details</h2>
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex gap-1">
-                  <MapPinIcon className="mt-4 w-5 h-5 text-emerald-600" />
-                  <textarea 
-                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 text-sm h-20" 
-                    placeholder="Update Office/Farm Address..." 
-                    value={publicContact.address} 
-                    onChange={e => setPublicContact({...publicContact, address: e.target.value})} 
-                  />
-                </div>
-                <div className="flex">
-                  <PhoneIcon className="mt-3 mr-2 w-5 h-5 text-emerald-600" />
-                  <input 
-                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 text-sm font-bold" 
-                    placeholder="Website Display Phone (e.g. +234...)" 
-                    value={publicContact.displayPhone} 
-                    onChange={e => setPublicContact({...publicContact, displayPhone: e.target.value})} 
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* HERO CONTENT SECTION */}
             <div className="bg-white px-3 py-5 sm:p-6 rounded-lg sm:rounded-[2.5rem] border border-emerald-100 shadow-sm">
               <h2 className="text-lg sm:text-xl font-black text-emerald-900 mb-4 sm:mb-6 flex items-center gap-2"><PencilIcon className="w-5 h-5" /> Hero Content</h2>
@@ -204,10 +182,44 @@ export default function HomeDashboard() {
                 ))}
               </div>
             </div>
+
+            {/* GLOBAL OFFICE CONTACT SECTION */}
+            <div className="bg-white px-3 py-5 sm:p-6 rounded-lg sm:rounded-[2.5rem] border border-emerald-100 shadow-sm">
+              <h2 className="text-lg sm:text-xl font-black text-emerald-900 mb-4 sm:mb-6 flex items-center gap-2"><MapPinIcon className="w-5 h-5" /> Public Office Details</h2>
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex gap-1">
+                  <MapPinIcon className="mt-4 w-5 h-5 text-emerald-600" />
+                  <textarea 
+                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 text-sm h-20" 
+                    placeholder="Update Office/Farm Address..." 
+                    value={publicContact.address} 
+                    onChange={e => setPublicContact({...publicContact, address: e.target.value})} 
+                  />
+                </div>
+                <div className="flex items-center">
+                  <PhoneIcon className="w-5 h-5 text-emerald-600 mr-2" />
+                  <input 
+                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 text-sm font-bold" 
+                    placeholder="Website Display Phone (e.g. +234...)" 
+                    value={publicContact.displayPhone} 
+                    onChange={e => setPublicContact({...publicContact, displayPhone: e.target.value})} 
+                  />
+                </div>
+                {/* ✅ FIXED: Email logic correctly implemented here */}
+                <div className="flex items-center">
+                  <EnvelopeIcon className="w-5 h-5 text-emerald-600 mr-2" />
+                  <input 
+                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl border-none ring-1 ring-gray-100 text-sm font-bold" 
+                    placeholder="Website Contact Email (e.g. info@farm.com)" 
+                    value={publicContact.displayEmail} 
+                    onChange={e => setPublicContact({...publicContact, displayEmail: e.target.value})} 
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-6">
-             {/* VIDEO & LIVESTOCK HEADER */}
              <div className="bg-white px-3 py-5 sm:p-6 rounded-lg sm:rounded-[2.5rem] border border-emerald-100 shadow-sm">
               <h2 className="text-lg sm:text-xl font-black text-emerald-900 mb-4 flex items-center gap-2"><VideoCameraIcon className="w-5 h-5" /> Video & Sections</h2>
               <div className="space-y-3 mb-4 sm:mb-6">
@@ -242,7 +254,6 @@ export default function HomeDashboard() {
               </div>
             </div>
 
-             {/* HERO GRID IMAGES */}
              <div className="bg-white px-3 py-5 sm:p-6 rounded-lg sm:rounded-[2.5rem] border border-emerald-100 shadow-sm">
                 <h2 className="text-lg sm:text-xl font-black text-emerald-900 mb-4 flex items-center gap-2"><PhotoIcon className="w-5 h-5" /> Hero Grid Images</h2>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -257,7 +268,6 @@ export default function HomeDashboard() {
                 </div>
              </div>
 
-             {/* FEATURED SELECTION */}
              <div className="sticky top-28">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 px-1 sm:px-2 gap-2 sm:gap-0">
                    <h2 className="text-lg sm:text-xl font-black text-emerald-900 uppercase">Feature on Home (3 Max)</h2>
