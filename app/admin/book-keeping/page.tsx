@@ -36,7 +36,8 @@ import {
   LockClosedIcon,
   ArrowLeftIcon,
   ShieldCheckIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ScaleIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -68,7 +69,8 @@ export default function MasterBookkeeping() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [unitPriceInput, setUnitPriceInput] = useState('')
   const [stockQty, setStockQty] = useState('')
-  const [walkInForm, setWalkInForm] = useState({ name: '', phone: '', category: '', qty: 1 })
+  // ✅ ADDED WEIGHT TO FORM STATE
+  const [walkInForm, setWalkInForm] = useState({ name: '', phone: '', category: '', qty: 1, weight: '' })
 
   useEffect(() => {
     const unsubCats = onSnapshot(collection(db, "livestockCategories"), (snap) => {
@@ -124,7 +126,9 @@ export default function MasterBookkeeping() {
   }, [categories, walkInForm.category]);
 
   const isOverStock = activeAnimal && !lastOrderId ? walkInForm.qty > activeAnimal.stockQty : false;
-  const currentTotal = (activeAnimal?.unitPrice || 0) * (Number(walkInForm.qty) || 0);
+  
+  // ✅ TOTAL CALCULATION (Price * Weight * Qty)
+  const currentTotal = (activeAnimal?.unitPrice || 0) * (Number(walkInForm.weight) || 0) * (Number(walkInForm.qty) || 0);
 
   const handleSingleDelete = async () => {
     const isVerified = await verifyCEO();
@@ -145,7 +149,6 @@ export default function MasterBookkeeping() {
         await deleteDoc(doc(db, "customersOrders", o.id));
       }
 
-      // ✅ RESET PERMANENT REVENUE IN FIREBASE
       await updateDoc(doc(db, "salesStats", "totals"), {
         daily: 0,
         monthly: 0,
@@ -238,6 +241,8 @@ export default function MasterBookkeeping() {
 
   const processFinalSale = async () => {
     if (isOverStock) return toast.error("Reduce quantity to match stock!");
+    if (!walkInForm.weight || Number(walkInForm.weight) <= 0) return toast.error("Please enter a valid weight");
+
     const tId = toast.loading("Processing...");
     try {
       const categoryName = getCategoryName(walkInForm.category);
@@ -248,7 +253,9 @@ export default function MasterBookkeeping() {
         phone: walkInForm.phone, 
         address: "Walk-in (In-Store)",
         orderDetails: categoryName,
+        category: categoryName,
         quantity: walkInForm.qty, 
+        weightPerUnit: Number(walkInForm.weight), // Added weight field
         totalAmount: currentTotal,
         status: 'delivered', 
         createdAt: serverTimestamp()
@@ -259,8 +266,7 @@ export default function MasterBookkeeping() {
         stockQty: increment(-Number(walkInForm.qty)) 
       });
 
-      // 3. ✅ FIX: Use setDoc instead of updateDoc for the Stats
-      // This ensures if the document is missing, it creates it instead of crashing
+      // 3. Update Revenue Stats
       const statsRef = doc(db, "salesStats", "totals");
       await setDoc(statsRef, {
         daily: increment(currentTotal),
@@ -274,7 +280,6 @@ export default function MasterBookkeeping() {
       toast.success("Sold!", { id: tId });
     } catch (err: any) { 
       console.error("Sale error details:", err);
-      // Detailed error toast
       toast.error(`Sale Failed: ${err.message || "Permission Denied"}`, { id: tId }); 
     }
   }
@@ -391,7 +396,7 @@ export default function MasterBookkeeping() {
                                 <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="p-8 text-gray-400 font-black text-[10px] uppercase">{order.createdAt?.toDate().toLocaleDateString('en-GB')}</td>
                                     <td className="p-8"><div className="text-gray-900 uppercase text-xs font-black">{order.customerName}</div><div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">{order.phone}</div></td>
-                                    <td className="p-8"><div className="inline-flex flex-col"><span className="text-emerald-700 text-xs font-black uppercase">{getCategoryName(order.orderDetails)}</span><span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest italic">Qty: {order.quantity}</span></div></td>
+                                    <td className="p-8"><div className="inline-flex flex-col"><span className="text-emerald-700 text-xs font-black uppercase">{getCategoryName(order.orderDetails)}</span><span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest italic">Qty: {order.quantity} | {order.weightPerUnit}kg</span></div></td>
                                     <td className="p-8 font-black text-emerald-900 text-base">₦{order.totalAmount?.toLocaleString()}</td>
                                     <td className="p-8 text-right">
                                         <button onClick={() => setItemToDelete(order.id)} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><TrashIcon className="w-5 h-5" /></button>
@@ -415,7 +420,7 @@ export default function MasterBookkeeping() {
                     <div className="absolute inset-0 z-[210] bg-white p-8 flex flex-col items-center justify-center text-center animate-in zoom-in duration-300">
                       <div className="w-16 h-16 bg-amber-100 rounded-xl flex items-center justify-center mb-4"><ExclamationTriangleIcon className="w-10 h-10 text-amber-600" /></div>
                       <h3 className="text-xl font-black text-gray-900 uppercase mb-2">Finalize Sale?</h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase mb-6 px-4">Qty <span className="text-emerald-700">{walkInForm.qty} {getCategoryName(walkInForm.category)}</span><br /> Total: <span className="text-emerald-700">₦{currentTotal.toLocaleString()}</span></p>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase mb-6 px-4">Qty <span className="text-emerald-700">{walkInForm.qty} {getCategoryName(walkInForm.category)}</span><br />Weight: <span className="text-emerald-700">{walkInForm.weight}kg</span><br /> Total: <span className="text-emerald-700">₦{currentTotal.toLocaleString()}</span></p>
                       <div className="w-full space-y-3">
                         <button onClick={processFinalSale} className="w-full py-4 bg-emerald-900 text-white rounded-xl font-black text-xs uppercase shadow-xl transition-all">Confirm Sale</button>
                         <button onClick={() => setShowConfirmSale(false)} className="w-full py-4 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase">Go Back</button>
@@ -442,7 +447,11 @@ export default function MasterBookkeeping() {
                             <option value="">Category</option>
                             {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                           </select>
-                          <input required type="number" min="1" placeholder="Qty" className={`p-4 rounded-xl font-bold text-sm border outline-none ${isOverStock ? 'bg-red-50 border-red-500 text-red-600' : 'bg-gray-50'}`} onChange={e => setWalkInForm({...walkInForm, qty: parseInt(e.target.value) || 1})} />
+                          <div className="relative">
+                            <ScaleIcon className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input required type="number" step="0.01" placeholder="Weight (kg)" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-sm border outline-none" onChange={e => setWalkInForm({...walkInForm, weight: e.target.value})} />
+                          </div>
+                          <input required type="number" min="1" placeholder="Qty" className={`col-span-2 p-4 rounded-xl font-bold text-sm border outline-none ${isOverStock ? 'bg-red-50 border-red-500 text-red-600' : 'bg-gray-50'}`} onChange={e => setWalkInForm({...walkInForm, qty: parseInt(e.target.value) || 1})} />
                         </div>
                         <button type="submit" disabled={isOverStock} className={`w-full py-5 rounded-xl font-black text-xs uppercase shadow-xl transition-all ${isOverStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-emerald-900 text-white active:scale-95'}`}>{isOverStock ? 'Low Stock' : 'Complete Sale'}</button>
                       </form>
@@ -463,7 +472,7 @@ export default function MasterBookkeeping() {
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Unit Price</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase ml-2 tracking-widest">Price / kg</label>
                     <input required type="number" className="p-4 bg-gray-50 rounded-xl font-bold text-sm border" value={unitPriceInput} onChange={e => setUnitPriceInput(e.target.value)} />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -492,7 +501,7 @@ export default function MasterBookkeeping() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="text-gray-900 font-black uppercase text-xs tracking-tight mb-1">{cat.name}</h3>
-                        <p className="text-emerald-800 font-black text-sm">₦{cat.unitPrice?.toLocaleString()}</p>
+                        <p className="text-emerald-800 font-black text-sm">₦{cat.unitPrice?.toLocaleString()} / kg</p>
                       </div>
                       <button onClick={() => confirmDelete(cat)} className="p-2 bg-red-50 text-red-600 rounded-lg shadow-sm">
                         <TrashIcon className="w-5 h-5" />
@@ -519,8 +528,8 @@ export default function MasterBookkeeping() {
                   <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
                     <tr>
                       <th className="p-6">Category</th>
-                      <th className="p-6">Price</th>
-                      <th className="p-6 text-center">Stock</th>
+                      <th className="p-6">Price / kg</th>
+                      <th className="p-6 text-center">Stock (Qty)</th>
                       <th className="p-6 text-right">Action</th>
                     </tr>
                   </thead>
@@ -558,8 +567,6 @@ export default function MasterBookkeeping() {
               </button>
               {showSales && (
                 <div className="p-6 pt-2 animate-in slide-in-from-top-4 duration-500 border-t border-gray-50">
-                  
-                  {/* ✅ REPLACE STATIC STATS WITH THE COMPONENT */}
                   <RevenueStats />
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mt-10">

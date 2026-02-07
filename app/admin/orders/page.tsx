@@ -12,7 +12,7 @@ import {
   doc, 
   deleteDoc, 
   getDocs, 
-  setDoc, // ✅ Added setDoc for safer updates
+  setDoc, 
   increment, 
   serverTimestamp
 } from 'firebase/firestore'
@@ -26,7 +26,8 @@ import {
   HashtagIcon,
   LinkIcon,
   ExclamationTriangleIcon,
-  XMarkIcon
+  XMarkIcon,
+  ScaleIcon // ✅ Added ScaleIcon for weight display
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -40,14 +41,12 @@ const AdminOrders = () => {
     const q = query(collection(db, "customersOrders"), orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // ✅ We cast the map result to any[] so TypeScript allows the .status check below
       const allOrders = snapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data() 
       })) as any[];
 
       const sortedOrders = [...allOrders].sort((a, b) => {
-        // Now 'status' is recognized
         if (a.status === 'pending' && b.status !== 'pending') return -1;
         if (a.status !== 'pending' && b.status === 'pending') return 1;
         return 0; 
@@ -59,11 +58,9 @@ const AdminOrders = () => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ UPDATED: Safer Logic to update stats (works for Online Orders)
   const recordPermanentRevenue = async (amount: number) => {
     try {
       const statsRef = doc(db, "salesStats", "totals");
-      // Using setDoc with merge: true ensures it never "hangs" if the doc is missing
       await setDoc(statsRef, {
         daily: increment(amount),
         monthly: increment(amount),
@@ -79,7 +76,6 @@ const AdminOrders = () => {
     try {
       const receiptUrl = `${window.location.origin}/receipt/${order.id}`;
       
-      // ✅ Updated Message to include Weight (if it exists)
       const messageText = `*ORDER DELIVERED*
 
         Hello ${order.customerName},
@@ -111,7 +107,6 @@ const AdminOrders = () => {
       
     } catch (error) {
       console.error("WhatsApp Error:", error);
-      // ... rest of your existing error handling ...
     }
   }
 
@@ -125,14 +120,12 @@ const AdminOrders = () => {
         return;
       }
 
-      // 1. UPDATE ORDER STATUS
       await updateDoc(doc(db, "customersOrders", order.id), { 
         status: 'delivered',
         deliveredAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       })
 
-      // 2. DEDUCT STOCK
       const inventoryRef = collection(db, "livestockCategories");
       const inventorySnap = await getDocs(inventoryRef);
       let foundCategory = false;
@@ -148,7 +141,6 @@ const AdminOrders = () => {
         }
       }
 
-      // ✅ 3. RECORD PERMANENT REVENUE (This is what updates your stats cards)
       await recordPermanentRevenue(Number(order.totalAmount) || 0);
 
       if (foundCategory) {
@@ -157,7 +149,6 @@ const AdminOrders = () => {
         toast.success("Order delivered and revenue recorded!", { id: tId });
       }
 
-      // 4. Notify Customer
       setTimeout(() => { sendWhatsAppNotification(order); }, 1000);
 
       setShowConfirmDelivery(false);
@@ -235,6 +226,11 @@ const AdminOrders = () => {
                   <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer</span>
                   <span className="text-sm font-black text-emerald-700">{selectedOrder.customerName}</span>
                 </div>
+                {/* Added Weight in confirm modal */}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Weight</span>
+                  <span className="text-sm font-black text-gray-900">{selectedOrder.weightPerUnit}kg</span>
+                </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Amount</span>
                   <span className="text-lg font-black text-emerald-900">₦{selectedOrder.totalAmount?.toLocaleString()}</span>
@@ -303,8 +299,9 @@ const AdminOrders = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {orders.map(order => {
               const qty = parseInt(order.quantity) || 1;
+              const weight = order.weightPerUnit || 0; // ✅ Fetch Weight
               const total = order.totalAmount || 0;
-              const unitCost = total > 0 ? total / qty : 0;
+              const unitCost = total > 0 ? total / (qty * (weight || 1)) : 0; // Adjusted for Weight in cost display
               const orderDate = order.createdAt?.toDate 
                 ? order.createdAt.toDate().toLocaleDateString('en-US', { 
                     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -348,22 +345,29 @@ const AdminOrders = () => {
                       </div>
                     )}
                     
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                      <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
-                          <BanknotesIcon className="w-3 h-3" /> Unit Cost
+                    {/* ✅ Updated Stats Grid to include Weight */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                        <p className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
+                          <ScaleIcon className="w-2.5 h-2.5" /> Weight
                         </p>
-                        <p className="text-sm font-black text-emerald-900">₦{unitCost > 0 ? unitCost.toLocaleString() : '---'}</p>
+                        <p className="text-[11px] font-black text-emerald-900">{weight}kg</p>
                       </div>
-                      <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
-                          <HashtagIcon className="w-3 h-3" /> Quantity
+                      <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                        <p className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
+                          <HashtagIcon className="w-2.5 h-2.5" /> Qty
                         </p>
-                        <p className="text-sm font-black text-emerald-900">{qty}</p>
+                        <p className="text-[11px] font-black text-emerald-900">{qty}</p>
+                      </div>
+                      <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                        <p className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter mb-1 flex items-center gap-1">
+                          <BanknotesIcon className="w-2.5 h-2.5" /> Price/kg
+                        </p>
+                        <p className="text-[11px] font-black text-emerald-900">₦{unitCost.toLocaleString()}</p>
                       </div>
                     </div>
 
-                    <div className="col-span-2 bg-emerald-900 p-3 rounded-lg border border-emerald-950 shadow-lg shadow-emerald-100">
+                    <div className="col-span-3 bg-emerald-900 p-3 rounded-lg border border-emerald-950 shadow-lg shadow-emerald-100">
                       <div className="flex justify-between items-center">
                         <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total Bill</p>
                         <p className="text-lg font-black text-white">₦{total > 0 ? total.toLocaleString() : 'No Amount Set'}</p>

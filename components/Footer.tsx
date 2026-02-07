@@ -5,7 +5,7 @@ import { db, auth } from '@/lib/firebaseConfig'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { signOut, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth'
-import { FaFacebookF, FaInstagram, FaWhatsapp, FaLock, FaTiktok } from 'react-icons/fa'
+import { FaFacebookF, FaInstagram, FaWhatsapp, FaLock, FaTiktok, FaTwitter, FaYoutube } from 'react-icons/fa'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
@@ -16,7 +16,6 @@ const Footer = () => {
   const [adminPassword, setAdminPassword] = useState('')
   const [error, setError] = useState('')
   
-  // ✅ NEW: State for Dynamic Years from Homepage Stats
   const [dynamicYears, setDynamicYears] = useState('25+')
 
   const [contactData, setContactData] = useState({ 
@@ -27,18 +26,17 @@ const Footer = () => {
   const currentYear = new Date().getFullYear()
 
   useEffect(() => {
-    // 1. Fetch Contact Data
+    // 1. Fetch Contact and Social Data
     const unsubContact = onSnapshot(doc(db, "settings", "contact"), (doc) => {
       if (doc.exists()) {
         setContactData(prev => ({ ...prev, ...doc.data() }))
       }
     })
 
-    // ✅ 2. Fetch Dynamic Experience (Years) from Homepage Settings
+    // 2. Fetch Dynamic Experience (Years) from Homepage Settings
     const unsubHome = onSnapshot(doc(db, "settings", "homepage"), (doc) => {
       if (doc.exists()) {
         const stats = doc.data().stats;
-        // Find the stat that looks like "Years" or just take the first one if indexed
         const yearStat = stats?.find((s: any) => s.label.toLowerCase().includes('year'));
         if (yearStat) setDynamicYears(yearStat.value);
       }
@@ -75,11 +73,14 @@ const Footer = () => {
     }
   };
 
+  // Dynamically filter active social links
   const socialLinks = [
-    { icon: <FaFacebookF />, color: 'hover:bg-blue-600', href: contactData.facebook || '#', label: 'facebook' },
-    { icon: <FaInstagram />, color: 'hover:bg-pink-600', href: contactData.instagram || '#', label: 'instagram' },
-    { icon: <FaTiktok />, color: 'hover:bg-black', href: contactData.tiktok || '#', label: 'tiktok' },
-  ]
+    { icon: <FaFacebookF />, color: 'hover:bg-blue-600', href: contactData.facebook, label: 'facebook' },
+    { icon: <FaInstagram />, color: 'hover:bg-pink-600', href: contactData.instagram, label: 'instagram' },
+    { icon: <FaTiktok />, color: 'hover:bg-black', href: contactData.tiktok, label: 'tiktok' },
+    { icon: <FaTwitter />, color: 'hover:bg-sky-500', href: contactData.twitter, label: 'twitter' },
+    { icon: <FaYoutube />, color: 'hover:bg-red-600', href: contactData.youtube, label: 'youtube' },
+  ].filter(link => link.href); // Only show links that have a URL set in Admin
 
   const whatsappUrl = contactData.phoneNumber 
     ? `https://wa.me/${contactData.phoneNumber.replace('+', '')}?text=${encodeURIComponent(contactData.boilerMessage || '')}` 
@@ -90,14 +91,12 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
           <div className="lg:col-span-2">
-            {/* ✅ Updated Branding: OBAAS Emmanuel Consult */}
             <div className="flex items-start space-x-2 md:space-x-3 mb-6">
               <div className="bg-white p-1 md:p-2 w-10 h-10 md:w-12 md:h-12 rounded-xl overflow-hidden flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                 <img src="/site_logo.png" alt="site logo" />
               </div>
               <div>
                 <h2 className="text-xl md:text-3xl font-bold font-serif leading-tight">OBAAS Emmanuel Consult</h2>
-                {/* ✅ Dynamic Years applied here */}
                 <p className="text-green-300 text-sm font-medium tracking-wide">Expert Consultancy & Quality Service with {dynamicYears} years of Excellence</p>
               </div>
             </div>

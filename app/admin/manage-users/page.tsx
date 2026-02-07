@@ -7,7 +7,7 @@ import { initializeApp, deleteApp, getApps } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { collection, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy, getDoc, setDoc, where } from 'firebase/firestore'
-import { UserPlusIcon, TrashIcon, ArrowLeftIcon, ShieldCheckIcon, PhoneIcon, AtSymbolIcon, PencilIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import { UserPlusIcon, TrashIcon, ArrowLeftIcon, ShieldCheckIcon, PhoneIcon, AtSymbolIcon, PencilIcon, SparklesIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpTrayIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 const ManageStaff = () => {
@@ -15,7 +15,6 @@ const ManageStaff = () => {
   const [admins, setAdmins] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
-  // NEW FIELD FOR ADMIN NAME ✅
   const [adminName, setAdminName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -311,9 +310,7 @@ const ManageStaff = () => {
                 <h2 className="text-lg font-bold text-gray-900">Add Staff</h2>
               </div>
 
-              {/* ADD NEW ADMIN MEMBER FORM */}
               <form onSubmit={handleAddAdmin} className="space-y-3">
-
                 <input
                   type="text"
                   required
@@ -351,7 +348,6 @@ const ManageStaff = () => {
               </form>
             </div>
             
-            {/* TEAM MEMBERS MOBILE VIEW */}
             <div className="lg:hidden bg-white max-h-[500px] overflow-y-auto p-3 rounded-lg shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-6 ml-2">
                 <h2 className="font-black text-gray-900 uppercase">
@@ -394,7 +390,6 @@ const ManageStaff = () => {
               </div>
             </div>
             
-            {/* GLOBAL CONTACT SETTINGS */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
               <button
                 onClick={() => setIsContactOpen(!isContactOpen)}
@@ -418,48 +413,87 @@ const ManageStaff = () => {
               </button>
 
               <div className={`${isContactOpen ? 'block' : 'hidden'} md:block p-4 md:p-6 pt-0`}>
-                <form onSubmit={handleUpdateSettings} className="space-y-3">
-                  <div className="relative group">
-                    <PhoneIcon className="w-4 h-4 absolute left-3.5 top-4 text-gray-400" />
-                    <input
-                      value={contactPhone}
-                      onChange={e => setContactPhone(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-100 rounded-lg text-xs"
-                      placeholder="Phone Number"
+                <form onSubmit={handleUpdateSettings} className="space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase">Direct Contact</p>
+                    <div className="relative group">
+                      <PhoneIcon className="w-4 h-4 absolute left-3.5 top-4 text-gray-400" />
+                      <input
+                        value={contactPhone}
+                        onChange={e => setContactPhone(e.target.value)}
+                        className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-100 rounded-lg text-xs"
+                        placeholder="Phone Number"
+                      />
+                    </div>
+
+                    <div className="relative group">
+                      <AtSymbolIcon className="w-4 h-4 absolute left-3.5 top-4 text-gray-400" />
+                      <input
+                        value={contactEmail}
+                        onChange={e => setContactEmail(e.target.value)}
+                        className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-100 rounded-lg text-xs"
+                        placeholder="CEO Email"
+                      />
+                    </div>
+
+                    <textarea
+                      value={boilerMessage}
+                      onChange={e => setBoilerMessage(e.target.value)}
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-lg text-xs h-20"
+                      placeholder="WhatsApp Message"
                     />
                   </div>
 
-                  <div className="relative group">
-                    <AtSymbolIcon className="w-4 h-4 absolute left-3.5 top-4 text-gray-400" />
-                    <input
-                      value={contactEmail}
-                      onChange={e => setContactEmail(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 bg-gray-50 border border-gray-100 rounded-lg text-xs"
-                      placeholder="CEO Email"
-                    />
+                  <div className="space-y-3 border-t border-gray-50 pt-4">
+                    <p className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-2">
+                      <GlobeAltIcon className="w-3 h-3"/> Social Media Links
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <input
+                        value={socials.facebook}
+                        onChange={e => setSocials({...socials, facebook: e.target.value})}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px]"
+                        placeholder="Facebook URL"
+                      />
+                      <input
+                        value={socials.instagram}
+                        onChange={e => setSocials({...socials, instagram: e.target.value})}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px]"
+                        placeholder="Instagram URL"
+                      />
+                      <input
+                        value={socials.tiktok}
+                        onChange={e => setSocials({...socials, tiktok: e.target.value})}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px]"
+                        placeholder="TikTok URL"
+                      />
+                      <input
+                        value={socials.twitter}
+                        onChange={e => setSocials({...socials, twitter: e.target.value})}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px]"
+                        placeholder="Twitter/X URL"
+                      />
+                      <input
+                        value={socials.youtube}
+                        onChange={e => setSocials({...socials, youtube: e.target.value})}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px]"
+                        placeholder="YouTube URL"
+                      />
+                    </div>
                   </div>
-
-                  <textarea
-                    value={boilerMessage}
-                    onChange={e => setBoilerMessage(e.target.value)}
-                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-lg text-xs h-20"
-                    placeholder="WhatsApp Message"
-                  />
 
                   <button
                     type="submit"
-                    className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 text-xs"
+                    className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 text-xs shadow-lg shadow-emerald-100"
                   >
-                    Update Settings
+                    Update Global Settings
                   </button>
                 </form>
               </div>
             </div>
           </div>
 
-          
           <div className="lg:col-span-8 space-y-6">
-            {/* TEAM MEMBERS DESKTOP VIEW */}
             <div className="hidden md:block bg-white max-h-[500px] overflow-y-auto p-3 md:p-8 rounded-lg shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-6 ml-2">
                 <h2 className="text-lg  font-black text-gray-900 uppercase">
@@ -500,7 +534,6 @@ const ManageStaff = () => {
               </div>
             </div>
 
-            {/* ABOUT PAGE EDITOR =================== */}
             <div className="bg-gray-100 p-4 md:p-8 rounded-lg border border-gray-200 shadow-inner">
               <button
                 onClick={() => setIsAboutOpen(!isAboutOpen)}
